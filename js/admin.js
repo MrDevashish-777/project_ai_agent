@@ -4,6 +4,7 @@
  */
 
 let adminToken = null;
+let adminChats = {}; // Store chats grouped by user_id
 
 /**
  * Show admin login modal
@@ -16,11 +17,9 @@ function showAdminLogin() {
 }
 
 /**
- * Close admin login modal
+ * Reset admin login inputs
  */
-function closeAdminLogin() {
-    const modal = document.getElementById('admin-login-modal');
-    modal.style.display = 'none';
+function resetAdminLoginInputs() {
     document.getElementById('admin-username').value = '';
     document.getElementById('admin-password').value = '';
 }
@@ -32,6 +31,7 @@ function closeAdminDashboard() {
     const dashboard = document.getElementById('admin-dashboard');
     dashboard.style.display = 'none';
     adminToken = null;
+    adminChats = {};
 }
 
 /**
@@ -60,7 +60,16 @@ async function performAdminLogin() {
         
         const data = await res.json();
         adminToken = data.token;
-        closeAdminLogin();
+        
+        // Close modal and reset inputs
+        if (typeof closeAdminModal === 'function') {
+            closeAdminModal();
+        } else {
+            // Fallback if app.js hasn't loaded or defined it
+            document.getElementById('admin-login-modal').style.display = 'none';
+        }
+        resetAdminLoginInputs();
+        
         showAdminDashboard();
         showNotification('Logged in as admin', false);
     } catch (err) {
@@ -73,7 +82,7 @@ async function performAdminLogin() {
  */
 async function showAdminDashboard() {
     const dashboard = document.getElementById('admin-dashboard');
-    dashboard.style.display = 'block';
+    dashboard.style.display = 'flex'; // Changed to flex for layout
     await loadAdminData();
 }
 
@@ -82,7 +91,7 @@ async function showAdminDashboard() {
  */
 async function loadAdminData() {
     try {
-        const res = await fetch(`${BASE}/admin/chats?limit=20`, {
+        const res = await fetch(`${BASE}/admin/chats?limit=100`, {
             headers: { 'Authorization': `Bearer ${adminToken}` }
         });
         
@@ -92,38 +101,131 @@ async function loadAdminData() {
         }
         
         const data = await res.json();
-        const tbody = document.getElementById('admin-chats-tbody');
-        tbody.innerHTML = '';
         
+        // Group messages by user_id
+        adminChats = {};
         if (data.conversations && data.conversations.length > 0) {
-            const uniqueUsers = new Set(data.conversations.map(c => c.user_id));
-            document.getElementById('admin-total-chats').textContent = data.count;
-            document.getElementById('admin-active-users').textContent = uniqueUsers.size;
+            // Sort by date ascending first to ensure order
+            data.conversations.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
             
-            data.conversations.forEach(conv => {
-                const row = document.createElement('tr');
-                const timestamp = conv.created_at 
-                    ? new Date(conv.created_at).toLocaleString() 
-                    : 'N/A';
-                const preview = (conv.message || '')
-                    .substring(0, 60)
-                    .replace(/</g, '&lt;')
-                    .replace(/>/g, '&gt;');
-                
-                row.innerHTML = `
-                    <td>${conv.user_id}</td>
-                    <td><strong>${conv.role}</strong></td>
-                    <td>${preview}${preview.length > 60 ? '...' : ''}</td>
-                    <td>${timestamp}</td>
-                `;
-                tbody.appendChild(row);
+            data.conversations.forEach(msg => {
+                if (!adminChats[msg.user_id]) {
+                    adminChats[msg.user_id] = {
+                        messages: [],
+                        lastMessage: msg,
+                        userId: msg.user_id
+                    };
+                }
+                adminChats[msg.user_id].messages.push(msg);
+                adminChats[msg.user_id].lastMessage = msg; // Update last message
             });
-        } else {
-            tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; padding: 20px;">No conversations found</td></tr>';
         }
+        
+        renderChatList();
+        
     } catch (err) {
         showNotification('Error loading data: ' + err.message, true);
     }
+}
+
+/**
+ * Render the list of chats in the sidebar
+ */
+function renderChatList() {
+    const chatList = document.getElementById('admin-chat-list');
+    chatList.innerHTML = '';
+    
+    const userIds = Object.keys(adminChats);
+    
+    if (userIds.length === 0) {
+        chatList.innerHTML = '<div style="padding: 20px; text-align: center; color: #666;">No conversations found</div>';
+        return;
+    }
+    
+    // Sort users by last message time (descending)
+    userIds.sort((a, b) => {
+        const timeA = new Date(adminChats[a].lastMessage.created_at);
+        const timeB = new Date(adminChats[b].lastMessage.created_at);
+        return timeB - timeA;
+    });
+    
+    userIds.forEach(userId => {
+        const chat = adminChats[userId];
+        const lastMsg = chat.lastMessage;
+        const time = new Date(lastMsg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        
+        const div = document.createElement('div');
+        div.className = 'chat-list-item';
+        div.onclick = () => openAdminChat(userId);
+        div.id = `chat-item-${userId}`;
+        
+        div.innerHTML = `
+            <div class="chat-avatar">
+                <i class="fas fa-user"></i>
+            </div>
+            <div class="chat-info">
+                <div class="chat-name">User ${userId.substring(0, 8)}...</div>
+                <div class="chat-preview">
+                    ${lastMsg.role === 'assistant' ? '<i class="fas fa-check-double" style="font-size: 0.7rem; color: #53bdeb;"></i> ' : ''}
+                    ${escapeHtml(lastMsg.message)}
+                </div>
+            </div>
+            <div class="chat-meta">${time}</div>
+        `;
+        
+        chatList.appendChild(div);
+    });
+}
+
+/**
+ * Open a specific chat
+ */
+function openAdminChat(userId) {
+    const chatData = adminChats[userId];
+    if (!chatData) return;
+    
+    // Update active state in sidebar
+    document.querySelectorAll('.chat-list-item').forEach(el => el.classList.remove('active'));
+    const activeItem = document.getElementById(`chat-item-${userId}`);
+    if (activeItem) activeItem.classList.add('active');
+    
+    // Update header
+    const headerUser = document.getElementById('current-chat-user');
+    headerUser.innerHTML = `<i class="fas fa-user-circle"></i> User ${userId}`;
+    
+    // Render messages
+    const messagesContainer = document.getElementById('admin-chat-messages');
+    messagesContainer.innerHTML = '';
+    
+    chatData.messages.forEach(msg => {
+        const msgDiv = document.createElement('div');
+        msgDiv.className = `admin-message ${msg.role === 'user' ? 'user' : 'bot'}`;
+        
+        const time = new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        
+        msgDiv.innerHTML = `
+            <div class="message-content">${escapeHtml(msg.message)}</div>
+            <div class="message-time">${time}</div>
+        `;
+        
+        messagesContainer.appendChild(msgDiv);
+    });
+    
+    // Scroll to bottom
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+}
+
+/**
+ * Helper to escape HTML
+ */
+function escapeHtml(text) {
+    if (!text) return '';
+    return text
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
 }
 
 /**
@@ -138,36 +240,52 @@ function initAdminListeners() {
     const adminPassword = document.getElementById('admin-password');
     
     // Admin panel button
-    adminPanelBtn.onclick = () => {
-        showAdminLogin();
-    };
+    if (adminPanelBtn) {
+        adminPanelBtn.onclick = () => {
+            showAdminLogin();
+        };
+    }
     
     // Login button
-    adminLoginBtn.onclick = () => {
-        performAdminLogin();
-    };
+    if (adminLoginBtn) {
+        adminLoginBtn.onclick = () => {
+            performAdminLogin();
+        };
+    }
     
     // Close login button
-    adminCloseBtn.onclick = () => {
-        closeAdminLogin();
-    };
+    if (adminCloseBtn) {
+        adminCloseBtn.onclick = () => {
+            if (typeof closeAdminModal === 'function') {
+                closeAdminModal();
+            } else {
+                document.getElementById('admin-login-modal').style.display = 'none';
+            }
+        };
+    }
     
     // Logout button
-    adminLogoutBtn.onclick = () => {
-        closeAdminDashboard();
-    };
+    if (adminLogoutBtn) {
+        adminLogoutBtn.onclick = () => {
+            closeAdminDashboard();
+        };
+    }
     
     // Enter key on username
-    adminUsername.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') {
-            performAdminLogin();
-        }
-    });
+    if (adminUsername) {
+        adminUsername.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                performAdminLogin();
+            }
+        });
+    }
     
     // Enter key on password
-    adminPassword.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') {
-            performAdminLogin();
-        }
-    });
+    if (adminPassword) {
+        adminPassword.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                performAdminLogin();
+            }
+        });
+    }
 }
