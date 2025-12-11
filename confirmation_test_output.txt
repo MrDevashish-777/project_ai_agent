@@ -1,0 +1,153 @@
+================================================================================
+TESTING BOOKING CONFIRMATION FLOW
+================================================================================
+
+[STEP 1] GREETING
+Bot: 🏨 Welcome to Nagpur Hotel Booking Assistant!
+
+To help you find the perfect hotel, please tell me:
+1️⃣ Your budget per night (e.g., '₹3000')
+2️⃣ Number of nights (e.g., '3 nights')
+3️⃣ Preferred location (optional, e.g., 'Sitabuldi')
+
+[STEP 2] SET BUDGET
+Bot: ✅ Budget ₹3000/night noted.
+
+How many nights would you like to stay? (e.g., '3 nights')
+
+[STEP 3] SET NIGHTS
+Bot: 🎉 Found 6 hotels for 2 nights within ₹3000/night. Here are the top options:
+
+Select a hotel to proceed or ask for details.
+
+[STEP 4] SHOW HOTELS
+Bot: 📋 Here are popular hotels in Nagpur. Click on a hotel or reply with the hotel id (e.g., 'h1') to view details or book.
+Hotels shown: 6
+  - Le Méridien Nagpur (5800/night)
+  - Radisson Blu Hotel Nagpur (5200/night)
+
+[STEP 5] SELECT HOTEL
+Bot: 📍 *Radisson Blu Hotel Nagpur*
+
+⭐ 4.6 | 💰 ₹5200/night | 📍 Wardha Road
+
+Amenities: Pool, WiFi, Parking, Bar
+
+Would you like to book this hotel?
+
+[STEP 6] INITIATE BOOKING
+Bot: 📝 To complete your booking, I'll need some details.
+
+First, please provide your full name.
+
+[STEP 7] PROVIDE NAME
+Bot: ✅ Thank you, John Doe. Now please provide your phone number (10 digits, e.g., 9876543210).
+
+[STEP 8] PROVIDE PHONE
+Bot: ✅ Thank you. Now please provide your check-in date in YYYY-MM-DD format (e.g., 2025-12-25).
+
+[STEP 9] PROVIDE CHECK-IN DATE
+Bot: 
+📋 **BOOKING SUMMARY**
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🏨 Hotel Name: Radisson Blu Hotel Nagpur
+📍 Location: Wardha Road
+⭐ Rating: 4.6/5.0
+👤 Guest Name: John Doe
+📅 Check-in Date: 2025-12-25
+
+💰 Pricing Breakdown:
+  • Price per night: ₹5,200.00
+  • Number of nights: 2
+  ┌─────────────────────────────────┐
+  • Subtotal (Before Taxes): ₹10,400.00
+  
+📊 Taxes & Total:
+  • GST (18%): ₹1,872.00
+  
+💳 Final Amount:
+  ✅ TOTAL AMOUNT DUE: ₹12,272.00
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+🔐 **Confirm booking? Please reply 'yes' to confirm or 'no' to cancel.**
+
+================================================================================
+CONFIRMATION STEP - This should show detailed booking summary
+================================================================================
+
+[STEP 10] CONFIRM BOOKING (YES)
+Bot: ✅ Perfect! Your booking is confirmed. Redirecting to payment. Your booking will be completed once payment is processed.
+[SUCCESS] Booking confirmed!
+Action: proceed_to_payment
+
+================================================================================
+TEST 2: Cancel Booking
+================================================================================
+
+Restarting flow for second test...
+
+Showing confirmation summary again:
+
+📋 **BOOKING SUMMARY**
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🏨 Hotel Name: Le Méridien Nagpur
+📍 Location: Wardha Road
+⭐ Rating: 4.7/5.0
+👤 Guest Name: Jane Smith
+📅 Check-in Date: 2025-12-30
+
+💰 Pricing Breakdown:
+  • Price per night: ₹5,800.00
+  • Number of nights: 3
+  ┌─────────────────────────────────┐
+  • Subtotal (Before Taxes): ₹17,400.00
+  
+📊 Taxes & Total:
+  • GST (18%): ₹3,132.00
+  
+💳 Final Amount:
+  ✅ TOTAL AMOUNT DUE: ₹20,532.00
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+🔐 **Confirm booking? Please reply 'yes' to confirm or 'no' to cancel.**
+
+User cancels booking (NO):
+Bot: ❌ Booking cancelled. No charges will be made. Let me help you search for different hotels. What's your budget per night?
+
+================================================================================
+TEST 3: Incomplete confirmation response
+================================================================================
+Showing confirmation:
+
+📋 **BOOKING SUMMARY**
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🏨 Hotel Name: The Pride Hotel Nagpur
+📍 Location: Wardha Road
+⭐ Rating: 4.3/5.0
+👤 Guest Name: Test User
+📅 Check-in Date: 2025-12-20
+
+💰 Pricing Breakdown:
+  • Price per night: ₹4,500.00
+  • Number of nights: 1
+  ┌─────────────────────────────────┐
+  • Subtotal (Before Taxes): ₹4,500.00
+  
+📊 Taxes & Total:
+  • GST (18%): ₹810.00
+  
+💳 Final Amount:
+  ✅ TOTAL AMOUNT DUE: ₹5,310.00
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+🔐 **Confirm booking? Please reply 'yes' to confirm or 'no' to cancel.**
+
+User gives invalid confirmation response:
+Bot: Please confirm by typing 'yes' to proceed with the booking, or 'no' to cancel.
+
+================================================================================
+CONFIRMATION FLOW TEST COMPLETE
+================================================================================
