@@ -59,7 +59,37 @@ def validate_booking_input(name: str, phone: str, checkin_date: str, nights: int
     
     return True, None
 
-def mask_pii(phone: str, name: str = None) -> dict:
-    masked_phone = phone[-4:].rjust(len(phone), "*") if phone else "***"
-    masked_name = (name[0] + "*" * (len(name) - 2) + name[-1]) if name and len(name) > 2 else "***"
+def mask_pii(phone: str = "", name: str = None) -> dict:
+    """Mask personally identifiable information for secure display."""
+    if not phone:
+        masked_phone = "***"
+    else:
+        phone_str = str(phone).replace("+91", "").strip()
+        if len(phone_str) >= 10:
+            masked_phone = phone_str[:0] + "*" * (len(phone_str) - 4) + phone_str[-4:]
+        else:
+            masked_phone = "*" * len(phone_str)
+    
+    if not name or len(name.strip()) < 2:
+        masked_name = "***"
+    else:
+        name_parts = name.strip().split()
+        masked_parts = []
+        for part in name_parts:
+            if len(part) <= 2:
+                masked_parts.append("*" * len(part))
+            else:
+                masked_parts.append(part[0] + "*" * (len(part) - 2) + part[-1])
+        masked_name = " ".join(masked_parts)
+    
     return {"phone": masked_phone, "name": masked_name}
+
+def get_safe_user_data(user: dict) -> dict:
+    """Return user data with PII masked for non-admin display."""
+    if not user:
+        return {}
+    return {
+        "id": user.get("id"),
+        "name": mask_pii(user.get("phone"), user.get("name"))["name"],
+        "phone": mask_pii(user.get("phone"), user.get("name"))["phone"],
+    }

@@ -41,9 +41,12 @@ class FakeTable:
         self._limit = n
         return self
 
-    def order(self, col, desc=False):
+    def order(self, col, desc=False, ascending=None):
         self._order_by = col
-        self._order_desc = desc
+        if ascending is not None:
+            self._order_desc = not ascending
+        else:
+            self._order_desc = desc
         return self
 
     def insert(self, payload):
@@ -51,32 +54,38 @@ class FakeTable:
         return self
 
     def execute(self):
-        if hasattr(self, '_insert_payload') and self._insert_payload is not None:
-            payload = self._insert_payload
-            if "id" not in payload:
-                payload = {**payload, "id": str(uuid4())}
-            if "created_at" not in payload:
-                from datetime import datetime
-                payload["created_at"] = datetime.now().isoformat()
-            self._storage.setdefault(self._name, []).append(payload)
-            self._insert_payload = None
-            return FakeResponse([payload])
-        
-        table = list(self._storage.get(self._name, []))
-        for col, val in self._filters:
-            table = [r for r in table if r.get(col) == val]
-        
-        if self._order_by:
-            table.sort(key=lambda x: x.get(self._order_by, ''), reverse=self._order_desc)
-        
-        if self._limit:
-            table = table[: self._limit]
-        
-        return FakeResponse(table)
+        try:
+            if hasattr(self, '_insert_payload') and self._insert_payload is not None:
+                payload = self._insert_payload
+                if "id" not in payload:
+                    payload = {**payload, "id": str(uuid4())}
+                if "created_at" not in payload:
+                    from datetime import datetime
+                    payload["created_at"] = datetime.now().isoformat()
+                self._storage.setdefault(self._name, []).append(payload)
+                self._insert_payload = None
+                return FakeResponse([payload])
+            
+            table = list(self._storage.get(self._name, []))
+            for col, val in self._filters:
+                table = [r for r in table if r.get(col) == val]
+            
+            if self._order_by:
+                try:
+                    table.sort(key=lambda x: x.get(self._order_by, ''), reverse=self._order_desc)
+                except Exception as e:
+                    raise ValueError(f"Error ordering by column '{self._order_by}': {str(e)}")
+            
+            if self._limit:
+                table = table[: self._limit]
+            
+            return FakeResponse(table)
+        except Exception as e:
+            raise Exception(f"Database query error in table '{self._name}': {str(e)}")
 
 class FakeSupabase:
     def __init__(self):
-        self._storage = {"users": [], "bookings": [], "conversations": []}
+        self._storage = {"users": [], "bookings": [], "conversations": [], "audit_logs": []}
 
     def table(self, name):
         return FakeTable(self._storage, name)
@@ -102,13 +111,17 @@ else:
     supabase = FakeSupabase()
 
 def upsert_user(name: str, phone: str) -> Dict[str, Any]:
-    # find user by phone or create
-    resp = supabase.table("users").select("*").eq("phone", phone).limit(1).execute()
-    data = resp.data
-    if data:
-        return data[0]
-    ins = supabase.table("users").insert({"name": name, "phone": phone}).execute()
-    return ins.data[0]
+    try:
+        resp = supabase.table("users").select("*").eq("phone", phone).limit(1).execute()
+        data = resp.data
+        if data:
+            return data[0]
+        ins = supabase.table("users").insert({"name": name, "phone": phone}).execute()
+        if not ins.data:
+            raise Exception("Failed to insert user")
+        return ins.data[0]
+    except Exception as e:
+        raise Exception(f"Error upserting user: {str(e)}")
 
 def save_conversation(user_id: Optional[str], role: str, message: str, meta: dict = None):
     payload = {"user_id": user_id, "role": role, "message": message, "meta": meta or {}}
@@ -131,13 +144,17 @@ def create_booking(user_id: Optional[str], hotel_id: str, hotel_name: str, check
         "visitors": visitors
     }
     try:
+        if not hotel_id or not hotel_name or not checkin_date or nights < 1:
+            raise ValueError("Invalid booking parameters")
         r = supabase.table("bookings").insert(payload).execute()
+        if not r.data:
+            raise Exception("Failed to insert booking")
         booking = r.data[0]
         print(f"✅ Booking created: {booking['id']} for user {user_id}")
         return booking
     except Exception as e:
         print(f"❌ Error creating booking: {e}")
-        raise
+        raise Exception(f"Booking creation failed: {str(e)}")
 
 def get_user_bookings(user_id: str) -> Dict[str, Any]:
     try:
@@ -157,6 +174,26 @@ def get_user_conversations(user_id: str) -> Dict[str, Any]:
         print(f"❌ Error retrieving conversations: {e}")
         return []
 
+
+def create_audit_log(action: str, user_id: Optional[str], resource_type: str, resource_id: str, details: Optional[Dict[str, Any]] = None):
+    """Create an audit log entry for tracking all significant actions."""
+    try:
+        from datetime import datetime
+        audit_entry = {
+            "timestamp": datetime.now().isoformat(),
+            "action": action,
+            "user_id": user_id,
+            "resource_type": resource_type,
+            "resource_id": resource_id,
+            "details": details or {},
+            "id": str(uuid4())
+        }
+        r = supabase.table("audit_logs").insert(audit_entry).execute()
+        print(f"✅ Audit log created: {action} on {resource_type} {resource_id}")
+        return r.data[0] if r.data else None
+    except Exception as e:
+        print(f"⚠️  Warning: Failed to create audit log: {e}")
+        return None
 
 def test_supabase_connection() -> Dict[str, Any]:
     """Return connection info and whether a real supabase DB is used.

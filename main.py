@@ -1,34 +1,78 @@
 import os
 import logging
 from datetime import datetime, timedelta
-from fastapi import FastAPI, HTTPException, Header
+from fastapi import FastAPI, HTTPException, Header, Request
+from fastapi.responses import JSONResponse
 from models import (
     ChatRequest, ChatResponse, BookingRequest, User,
     InternalSearchHotelsRequest, InternalBookHotelRequest,
     CreatePaymentIntentRequest, GenerateInvoiceRequest,
     AdminLoginRequest
 )
-from chatbot import bot_reply, get_hotel_by_id, generate_bill, search_hotels_internal
+from chatbot import bot_reply, get_hotel_by_id, generate_bill, search_hotels_internal, prepare_booking_confirmation
 from validators import validate_booking_input, mask_pii, validate_phone, validate_date
 import db
+from db import create_audit_log
 from dotenv import load_dotenv
 from fastapi.middleware.cors import CORSMiddleware
 import uuid
+from collections import defaultdict
+import time
 
 load_dotenv()
 
 app = FastAPI(title="Nagpur Hotel AI Agent")
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 logger = logging.getLogger(__name__)
+
+ALLOWED_ORIGINS = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://localhost:5173",
+    os.getenv("FRONTEND_URL", "").strip() if os.getenv("FRONTEND_URL") else None
+]
+ALLOWED_ORIGINS = [origin for origin in ALLOWED_ORIGINS if origin]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:5173"],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
-    allow_methods=["GET", "POST"],
+    allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["Content-Type", "Authorization"],
+    max_age=3600,
 )
+
+class RateLimitMiddleware:
+    def __init__(self, app, requests_per_minute: int = 100):
+        self.app = app
+        self.requests_per_minute = requests_per_minute
+        self.requests = defaultdict(list)
+    
+    async def __call__(self, request: Request, call_next):
+        client_ip = request.client.host if request.client else "unknown"
+        now = time.time()
+        
+        if client_ip not in self.requests:
+            self.requests[client_ip] = []
+        
+        self.requests[client_ip] = [req_time for req_time in self.requests[client_ip] if now - req_time < 60]
+        
+        if len(self.requests[client_ip]) >= self.requests_per_minute:
+            logger.warning(f"Rate limit exceeded for IP: {client_ip}")
+            return JSONResponse(
+                status_code=429,
+                content={"detail": "Too many requests. Please try again later."}
+            )
+        
+        self.requests[client_ip].append(now)
+        return await call_next(request)
+
+rate_limit_middleware = RateLimitMiddleware(app, requests_per_minute=100)
+app.middleware("http")(lambda request, call_next: rate_limit_middleware(request, call_next))
 
 ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "admin")
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin123")
@@ -62,6 +106,49 @@ async def search_hotels(req: InternalSearchHotelsRequest):
         logger.error(f"Search error: {e}")
         raise HTTPException(status_code=400, detail=str(e))
 
+@app.post("/internal/confirm_booking")
+async def confirm_booking(req: InternalBookHotelRequest):
+    """Generate booking confirmation summary without creating the booking yet."""
+    try:
+        is_valid, error = validate_booking_input(
+            req.name, req.phone, req.checkin_date, req.nights, req.visitors
+        )
+        if not is_valid:
+            logger.warning(f"Invalid booking confirmation input: {error}")
+            raise HTTPException(status_code=400, detail=error)
+        
+        hotel = get_hotel_by_id(req.hotel_id)
+        if not hotel:
+            logger.warning(f"Hotel not found: {req.hotel_id}")
+            raise HTTPException(status_code=404, detail="Hotel not found")
+        
+        summary, booking_data = prepare_booking_confirmation(
+            req.user_id, req.name, req.phone, req.hotel_id, req.checkin_date, req.nights
+        )
+        
+        total_price = hotel["price_per_night"] * req.nights
+        tax = total_price * 0.18
+        
+        logger.info(f"Booking confirmation generated for user {req.user_id}")
+        
+        return {
+            "status": "confirmation_pending",
+            "summary": summary,
+            "booking_details": {
+                "hotel_name": hotel["name"],
+                "price_per_night": hotel["price_per_night"],
+                "nights": req.nights,
+                "subtotal": total_price,
+                "gst": tax,
+                "total": total_price + tax
+            }
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Booking confirmation error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.post("/internal/book_hotel")
 async def book_hotel_internal(req: InternalBookHotelRequest):
     try:
@@ -69,10 +156,12 @@ async def book_hotel_internal(req: InternalBookHotelRequest):
             req.name, req.phone, req.checkin_date, req.nights, req.visitors
         )
         if not is_valid:
+            logger.warning(f"Invalid booking input: {error}")
             raise HTTPException(status_code=400, detail=error)
         
         hotel = get_hotel_by_id(req.hotel_id)
         if not hotel:
+            logger.warning(f"Hotel not found: {req.hotel_id}")
             raise HTTPException(status_code=404, detail="Hotel not found")
         
         user = db.upsert_user(req.name, req.phone)
@@ -84,29 +173,58 @@ async def book_hotel_internal(req: InternalBookHotelRequest):
             req.checkin_date, req.nights, total_price, req.visitors
         )
         
-        logger.info(f"Booking created: {booking['id']} for user {user_id}")
+        booking_id = booking["id"]
+        
+        create_audit_log(
+            action="BOOKING_CREATED",
+            user_id=user_id,
+            resource_type="booking",
+            resource_id=booking_id,
+            details={
+                "hotel_name": hotel["name"],
+                "checkin_date": req.checkin_date,
+                "nights": req.nights,
+                "visitors": req.visitors,
+                "total_price": total_price
+            }
+        )
+        
+        logger.info(f"Booking created: {booking_id} for user {user_id} at {hotel['name']}")
         
         return {
             "status": "success",
-            "booking_id": booking["id"],
+            "booking_id": booking_id,
             "total_price": total_price,
             "hotel": hotel
         }
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Booking error: {e}")
+        logger.error(f"Booking error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/internal/payment_intent")
 async def create_payment_intent(req: CreatePaymentIntentRequest):
     try:
         if req.amount_inr <= 0:
+            logger.warning(f"Invalid payment amount: {req.amount_inr}")
             raise HTTPException(status_code=400, detail="Amount must be positive")
         
         payment_id = f"pi_{uuid.uuid4().hex[:12]}"
         payment_url = f"https://payment.example.com/{payment_id}"
         client_secret = f"sk_{uuid.uuid4().hex[:20]}"
+        
+        create_audit_log(
+            action="PAYMENT_INTENT_CREATED",
+            user_id=None,
+            resource_type="payment",
+            resource_id=payment_id,
+            details={
+                "amount_inr": req.amount_inr,
+                "currency": req.currency,
+                "booking_id": req.booking_id
+            }
+        )
         
         logger.info(f"Payment intent created: {payment_id} for ₹{req.amount_inr}")
         
@@ -118,8 +236,10 @@ async def create_payment_intent(req: CreatePaymentIntentRequest):
             "client_secret": client_secret,
             "status": "pending"
         }
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Payment intent error: {e}")
+        logger.error(f"Payment intent error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/internal/generate_invoice")
@@ -127,12 +247,14 @@ async def generate_invoice_internal(req: GenerateInvoiceRequest):
     try:
         bookings = db.supabase.table("bookings").select("*").eq("id", req.booking_id).execute()
         if not bookings.data:
+            logger.warning(f"Booking not found for invoice: {req.booking_id}")
             raise HTTPException(status_code=404, detail="Booking not found")
         
         booking = bookings.data[0]
         hotel = get_hotel_by_id(booking["hotel_id"])
         
         if not hotel:
+            logger.warning(f"Hotel not found for booking: {booking['hotel_id']}")
             raise HTTPException(status_code=404, detail="Hotel not found")
         
         subtotal = booking["total_price"]
@@ -155,6 +277,19 @@ async def generate_invoice_internal(req: GenerateInvoiceRequest):
         </html>
         """
         
+        create_audit_log(
+            action="INVOICE_GENERATED",
+            user_id=booking.get("user_id"),
+            resource_type="invoice",
+            resource_id=invoice_id,
+            details={
+                "booking_id": req.booking_id,
+                "subtotal": subtotal,
+                "gst": gst,
+                "total": total
+            }
+        )
+        
         logger.info(f"Invoice generated: {invoice_id} for booking {req.booking_id}")
         
         return {
@@ -168,7 +303,7 @@ async def generate_invoice_internal(req: GenerateInvoiceRequest):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Invoice generation error: {e}")
+        logger.error(f"Invoice generation error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/admin/login")
@@ -176,6 +311,13 @@ async def admin_login(req: AdminLoginRequest):
     try:
         if req.username != ADMIN_USERNAME or req.password != ADMIN_PASSWORD:
             logger.warning(f"Failed admin login attempt for user: {req.username}")
+            create_audit_log(
+                action="ADMIN_LOGIN_FAILED",
+                user_id=None,
+                resource_type="admin",
+                resource_id=req.username,
+                details={"attempt_time": datetime.now().isoformat()}
+            )
             raise HTTPException(status_code=401, detail="Invalid credentials")
         
         token = f"adm_{uuid.uuid4().hex[:20]}"
@@ -184,45 +326,68 @@ async def admin_login(req: AdminLoginRequest):
             "expires_at": datetime.now() + timedelta(hours=2)
         }
         
-        logger.info(f"Admin login successful")
+        create_audit_log(
+            action="ADMIN_LOGIN_SUCCESS",
+            user_id=req.username,
+            resource_type="admin",
+            resource_id=req.username,
+            details={"token_created": datetime.now().isoformat()}
+        )
+        
+        logger.info(f"Admin login successful for user: {req.username}")
         return {"status": "success", "token": token, "expires_in": 7200}
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Admin login error: {e}")
+        logger.error(f"Admin login error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/admin/chats")
 async def fetch_chats(limit: int = 50, authorization: str = Header(None)):
     try:
         if not authorization or not authorization.startswith("Bearer "):
+            logger.warning("Fetch chats attempt without valid authorization")
             raise HTTPException(status_code=401, detail="Missing or invalid token")
         
         token = authorization.split(" ")[1]
         if token not in ADMIN_TOKENS:
+            logger.warning(f"Fetch chats attempt with invalid token")
             raise HTTPException(status_code=401, detail="Invalid token")
         
         token_data = ADMIN_TOKENS[token]
         if datetime.now() > token_data["expires_at"]:
             del ADMIN_TOKENS[token]
+            logger.warning(f"Fetch chats attempt with expired token")
             raise HTTPException(status_code=401, detail="Token expired")
         
         conversations = db.supabase.table("conversations").select("*").limit(limit).order("created_at", desc=True).execute()
         
-        masked_conversations = []
+        safe_conversations = []
         for conv in conversations.data:
-            masked = dict(conv)
-            if "message" in masked:
-                pii = mask_pii("", "")
-                masked["message_preview"] = masked["message"][:100]
-            masked_conversations.append(masked)
+            safe_conv = {
+                "id": conv.get("id"),
+                "user_id": conv.get("user_id"),
+                "role": conv.get("role"),
+                "message_preview": conv.get("message", "")[:100],
+                "created_at": conv.get("created_at"),
+                "meta": conv.get("meta", {})
+            }
+            safe_conversations.append(safe_conv)
         
-        logger.info(f"Admin fetched {len(conversations.data)} conversations")
-        return {"conversations": masked_conversations, "count": len(conversations.data)}
+        create_audit_log(
+            action="ADMIN_FETCH_CHATS",
+            user_id=None,
+            resource_type="admin",
+            resource_id="fetch_chats",
+            details={"conversation_count": len(safe_conversations), "limit": limit}
+        )
+        
+        logger.info(f"Admin fetched {len(safe_conversations)} conversations")
+        return {"conversations": safe_conversations, "count": len(safe_conversations)}
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Fetch chats error: {e}")
+        logger.error(f"Fetch chats error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/hotels")
