@@ -29,9 +29,22 @@ CREATE TABLE IF NOT EXISTS public.conversations (
   created_at timestamptz DEFAULT now()
 );
 
+-- Create audit_logs table
+CREATE TABLE IF NOT EXISTS public.audit_logs (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid REFERENCES public.users(id) ON DELETE SET NULL,
+  action text NOT NULL,
+  resource_type text,
+  resource_id text,
+  details jsonb DEFAULT '{}'::jsonb,
+  timestamp timestamptz DEFAULT now(),
+  created_at timestamptz DEFAULT now()
+);
+
 -- Create indexes
 CREATE INDEX IF NOT EXISTS idx_bookings_user_id ON public.bookings(user_id);
 CREATE INDEX IF NOT EXISTS idx_conversations_user_id ON public.conversations(user_id);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_user_id ON public.audit_logs(user_id);
 
 -- Grant access to 'anon' or public role (optional; please review security needs)
 -- If your project enforces Row Level Security (RLS), ensure policies allow inserts/selects for service key
