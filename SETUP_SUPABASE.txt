@@ -1,0 +1,105 @@
+IMPORTANT: .env Setup for Supabase Data Persistence
+===================================================
+
+Your Supabase credentials ARE configured but stored in wrong location.
+
+CURRENT LOCATION: .env\ini (WRONG - This is a folder)
+CORRECT LOCATION: .env (file in project root)
+
+STEP 1: Create .env file in project root
+========================================
+
+In your project root (c:\Users\OM\Downloads\project_ai_agent\), create a file named ".env" (not a folder) with these exact contents:
+
+SUPABASE_URL=https://dehuipkdltaiumsifyka.supabase.co
+SUPABASE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRlaHVpcGtkbHRhaXVtc2lmeWthIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2NDMxNzExNCwiZXhwIjoyMDc5ODkzMTE0fQ.gOKJO2Jm_rh7aaAOErLW0v8XbgnR6lWuDUmij2IKO1k
+
+STEP 2: Verify directory structure
+===================================
+
+After creating .env file, your project should look like:
+
+project_ai_agent/
+├── .env              ✅ FILE (not folder!)
+├── .venv/
+├── main.py
+├── chatbot.py
+├── db.py
+├── index.html
+├── requirements.txt
+├── README.md
+└── ... other files
+
+STEP 3: Restart Backend
+=======================
+
+After creating .env file:
+
+PowerShell:
+-----------
+cd c:\Users\OM\Downloads\project_ai_agent
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt --upgrade
+uvicorn main:app --reload --host 127.0.0.1 --port 8000
+
+STEP 4: Verify Connection
+==========================
+
+In a new PowerShell terminal:
+
+curl http://127.0.0.1:8000/supabase_test
+
+You should see:
+{
+  "using_fake": false,
+  "supabase_url": "https://dehuipkdltaiumsifyka.supabase.co",
+  "ok": true,
+  "user_sample": []
+}
+
+If "using_fake" is false: ✅ Connected to real Supabase!
+If "using_fake" is true: ❌ Still using local storage (check .env file)
+
+STEP 5: View All Data
+=====================
+
+Once backend is running, visit in browser or use curl:
+
+http://127.0.0.1:8000/all_data
+
+This shows ALL users, conversations, and bookings stored in Supabase.
+
+STEP 6: Test Complete Flow
+===========================
+
+1. Open index.html in browser
+2. Say "Hi" in chat
+3. Enter budget: "2500"
+4. Enter nights: "3 nights"
+5. Select a hotel
+6. Fill in booking form
+7. Click "Confirm Booking"
+
+Everything should now be saved to Supabase!
+
+VERIFICATION
+============
+
+Check backend terminal - you should see lines like:
+✅ Conversation saved: u1234567 - user - [...]
+✅ Booking created: 12345678-1234-1234-1234-123456789012 for user u1234567
+
+Check all data:
+curl http://127.0.0.1:8000/all_data
+
+You should see counts increasing!
+
+STILL NOT WORKING?
+=================
+
+1. Make sure .env is a FILE not a FOLDER
+2. Make sure .env is in project ROOT directory
+3. Check credentials are correct (copy from Supabase dashboard)
+4. Restart backend after creating .env
+5. Check backend console for error messages
+6. Check browser console for network errors
