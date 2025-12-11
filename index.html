@@ -216,7 +216,7 @@
     const input = document.getElementById('chat-input');
     const chatBody = document.getElementById('chat-body');
     const BASE = 'http://127.0.0.1:8000';
-    let userPreferences = { nights: null, budget: null };
+    let userPreferences = { nights: null, budget: null, visitors: null };
     let adminToken = null;
     
     function getUserId() {
@@ -390,6 +390,10 @@
             .then(data => {
                 removeTyping(t);
                 addMessage(data.reply, 'bot', { suggestions: data.suggestions || [] });
+                if (data.meta) {
+                    if (data.meta.nights) userPreferences.nights = data.meta.nights;
+                    if (data.meta.visitors) userPreferences.visitors = data.meta.visitors;
+                }
                 if (data.suggestions && data.suggestions.length > 0) {
                     data.suggestions.forEach(s => {
                         if (s.price_per_night) userPreferences.budget = s.price_per_night;
@@ -521,9 +525,9 @@
         bName.value = '';
         bPhone.value = '';
         bNights.value = userPreferences.nights || 1;
-        bVisitors.value = 1;
+        bVisitors.value = userPreferences.visitors || 1;
         modal.style.display = 'flex';
-        addMessage(`📋 Opening booking form for ${hotel.name}...`, 'bot');
+        // Removed redundant "Opening booking form" message
     }
 
     function closeBookingModal() {
@@ -549,8 +553,9 @@
         }
 
         userPreferences.nights = nights;
+        userPreferences.visitors = visitors;
         closeBookingModal();
-        addMessage(`🔄 Processing booking for ${pendingHotel.name}...`, 'user');
+        addMessage(`🔄 Confirming your booking for ${pendingHotel.name}...`, 'bot');
         performBook(name, phone, pendingHotel.id, date, nights, visitors);
     };
 

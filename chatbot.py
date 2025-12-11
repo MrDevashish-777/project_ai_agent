@@ -40,6 +40,16 @@ def parse_nights(message: str) -> Optional[int]:
             return None
     return None
 
+def parse_visitors(message: str) -> Optional[int]:
+    m = re.search(r"(\d+)\s*(?:people|person|visitors|guests|pax)", message.lower())
+    if m:
+        try:
+            visitors = int(m.group(1))
+            return visitors if 1 <= visitors <= 10 else None
+        except:
+            return None
+    return None
+
 def search_hotels_internal(max_price: Optional[int] = None, location: Optional[str] = None, 
                           min_rating: Optional[float] = None, amenities: Optional[List[str]] = None, 
                           limit: int = 5) -> List[dict]:
@@ -196,10 +206,14 @@ def call_gemini_api(message: str, context: str = "") -> Optional[str]:
     try:
         # Build context for Gemini about the hotel booking domain
         system_prompt = """You are a helpful Hotel Booking Assistant for Nagpur hotels. 
-You help customers find and book hotels in Nagpur with a focus on:
-- Budget-friendly options
-- Various locations in Nagpur (Sitabuldi, Wardha Road, Ramdas Peth, etc.)
-- Professional and friendly service
+You help customers find hotels in Nagpur.
+IMPORTANT: You cannot process bookings directly.
+If the user wants to book a hotel or register:
+- If they haven't selected a hotel, ask them to select one from the list.
+- If they have selected a hotel, tell them to type 'book' or 'proceed' to start the booking.
+- Do NOT ask for personal details like name or phone number.
+- Do NOT pretend to complete a booking.
+Focus on answering general questions about the hotels, location, and amenities.
 Respond naturally and helpfully. Keep responses concise (1-2 sentences)."""
         
         full_message = f"{system_prompt}\n\nCustomer: {message}"
@@ -231,6 +245,7 @@ def bot_reply(user_msg: str, user_id: str = None) -> Tuple[str, Optional[List[di
     
     budget = parse_budget(user_msg)
     nights = parse_nights(user_msg)
+    visitors = parse_visitors(user_msg)
     location = None
     if not budget and not nights:
         for area in ["sitabuldi", "wardha road", "ramdas peth", "central avenue", "sadar", "dharampeth", "gandhibagh"]:
@@ -247,6 +262,10 @@ def bot_reply(user_msg: str, user_id: str = None) -> Tuple[str, Optional[List[di
     if nights:
         pref["nights"] = nights
         meta["nights"] = nights
+
+    if visitors:
+        pref["visitors"] = visitors
+        meta["visitors"] = visitors
     
     if location:
         pref["location"] = location
@@ -266,6 +285,7 @@ def bot_reply(user_msg: str, user_id: str = None) -> Tuple[str, Optional[List[di
         hotel = get_hotel_by_id(hid)
         if hotel:
             pref["selected_hotel"] = hotel
+            pref["awaiting_booking_decision"] = True
             meta["selected_hotel"] = hotel
             details = f"⭐ {hotel['rating']} | 💰 ₹{hotel['price_per_night']}/night | 📍 {hotel['area']}\n\nAmenities: {hotel.get('amenities', 'N/A')}"
             reply = f"📍 *{hotel['name']}*\n\n{details}\n\nWould you like to book this hotel?"
@@ -373,7 +393,18 @@ def bot_reply(user_msg: str, user_id: str = None) -> Tuple[str, Optional[List[di
                 reply = "Please provide a valid date in YYYY-MM-DD format (e.g., 2025-12-25)."
                 return reply, None, meta
     
-    if any(w in lower for w in ["book", "booking", "i want to book", "reserve", "proceed"]):
+    booking_keywords = ["book", "booking", "i want to book", "reserve", "proceed", "register", "registration"]
+    affirmative = ["yes", "yeah", "sure", "ok", "yep", "confirm"]
+    negative = ["no", "nope", "cancel", "not now", "don't"]
+    
+    if pref.get("awaiting_booking_decision") and any(w in lower for w in negative):
+        pref["awaiting_booking_decision"] = False
+
+    is_booking_intent = any(w in lower for w in booking_keywords)
+    is_affirmative = any(w in lower for w in affirmative)
+    
+    if is_booking_intent or (is_affirmative and pref.get("awaiting_booking_decision")):
+        pref["awaiting_booking_decision"] = False  # Reset flag
         selected_hotel = pref.get("selected_hotel")
         
         if not selected_hotel:

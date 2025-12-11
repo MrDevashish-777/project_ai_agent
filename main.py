@@ -515,6 +515,7 @@ async def fetch_chats(limit: int = 50, authorization: str = Header(None)):
                 "id": conv.get("id"),
                 "user_id": conv.get("user_id"),
                 "role": conv.get("role"),
+                "message": conv.get("message", ""),
                 "message_preview": conv.get("message", "")[:100],
                 "created_at": conv.get("created_at"),
                 "meta": conv.get("meta", {})
