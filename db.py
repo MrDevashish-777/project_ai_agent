@@ -26,6 +26,8 @@ class FakeTable:
         self._select_cols = None
         self._filters = []
         self._limit = None
+        self._order_by = None
+        self._order_desc = False
 
     def select(self, *cols):
         self._select_cols = cols
@@ -39,26 +41,37 @@ class FakeTable:
         self._limit = n
         return self
 
+    def order(self, col, desc=False):
+        self._order_by = col
+        self._order_desc = desc
+        return self
+
     def insert(self, payload):
-        # Queue insert payload and return self to allow .execute() chaining like the real supabase client
         self._insert_payload = payload if isinstance(payload, dict) else (payload[0] if payload else {})
         return self
 
     def execute(self):
-        # apply filters
-        # Check for pending insert
         if hasattr(self, '_insert_payload') and self._insert_payload is not None:
             payload = self._insert_payload
             if "id" not in payload:
                 payload = {**payload, "id": str(uuid4())}
+            if "created_at" not in payload:
+                from datetime import datetime
+                payload["created_at"] = datetime.now().isoformat()
             self._storage.setdefault(self._name, []).append(payload)
             self._insert_payload = None
             return FakeResponse([payload])
+        
         table = list(self._storage.get(self._name, []))
         for col, val in self._filters:
             table = [r for r in table if r.get(col) == val]
+        
+        if self._order_by:
+            table.sort(key=lambda x: x.get(self._order_by, ''), reverse=self._order_desc)
+        
         if self._limit:
             table = table[: self._limit]
+        
         return FakeResponse(table)
 
 class FakeSupabase:
