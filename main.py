@@ -73,6 +73,7 @@ ALLOWED_ORIGINS = [
     "http://127.0.0.1:3000",
     "http://localhost:5173",
     "http://127.0.0.1:8000",
+    "http://127.0.0.1:56048",
     os.getenv("FRONTEND_URL", "").strip() if os.getenv("FRONTEND_URL") else None
 ]
 ALLOWED_ORIGINS = [origin for origin in ALLOWED_ORIGINS if origin]
