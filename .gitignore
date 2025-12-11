@@ -1,0 +1,231 @@
+# ============================================
+# VIRTUAL ENVIRONMENTS
+# ============================================
+.venv/
+venv/
+env/
+ENV/
+.env.venv
+*.egg-info/
+*.eggs/
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# ============================================
+# ENVIRONMENT VARIABLES
+# ============================================
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# ============================================
+# IDE & EDITOR FILES
+# ============================================
+# Visual Studio Code
+.vscode/
+*.code-workspace
+.history/
+
+# PyCharm / IntelliJ
+.idea/
+*.iml
+*.iws
+*.ipr
+.gradle
+local.properties
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# Vim
+.vim/
+*~
+*.swp
+*.swo
+.*.swo
+.*.swp
+
+# Emacs
+*~
+\#*\#
+.\#*
+
+# Nano
+.nano_history
+
+# General Editor Backups
+*.bak
+*.backup
+*~
+
+# ============================================
+# PYTHON SPECIFIC
+# ============================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+pip-log.txt
+pip-delete-this-directory.txt
+.tox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+htmlcov/
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# ============================================
+# DATABASE & DATA FILES
+# ============================================
+*.db
+*.sqlite
+*.sqlite3
+local.db
+test.db
+*.postgres
+*.pgsql
+
+# ============================================
+# LOGS
+# ============================================
+*.log
+logs/
+*.log.*
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+pip-debug.log*
+
+# ============================================
+# TEMPORARY FILES
+# ============================================
+*.tmp
+*.temp
+*.bak
+.DS_Store
+Thumbs.db
+desktop.ini
+$RECYCLE.BIN/
+.Trash-*
+
+# ============================================
+# OS SPECIFIC
+# ============================================
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+.TemporaryItems
+._*
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*.lnk
+
+# Linux
+.directory
+*~
+
+# ============================================
+# NODE & WEB DEVELOPMENT (if applicable)
+# ============================================
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.npm/
+.eslintcache
+.node_repl_history
+*.tsbuildinfo
+dist/
+out/
+
+# ============================================
+# BUILD & DIST
+# ============================================
+build/
+dist/
+.egg-info/
+wheels/
+
+# ============================================
+# TESTING
+# ============================================
+.pytest_cache/
+.coverage/
+htmlcov/
+.tox/
+.hypothesis/
+*.cover
+test_results/
+test_output/
+
+# ============================================
+# VIRTUAL ENVIRONMENT (additional)
+# ============================================
+/env
+/venv
+.venv
+.env.bak
+.venv.bak
+
+# ============================================
+# OUTPUT & SNAPSHOT FILES (project specific)
+# ============================================
+outputs/
+outputs.json
+*.snapshot
+*.html
+ui_*.html
+screenshots/
+*.png
+*.jpg
+*.jpeg
+*.gif
+
+# ============================================
+# PROJECT SPECIFIC (optional - uncomment if needed)
+# ============================================
+# Temporary data files
+temp/
+tmp/
+temp_data/
+
+# ============================================
+# MISCELLANEOUS
+# ============================================
+.vscode-settings.json
+settings.json
+*.bak
