@@ -2,11 +2,15 @@
 import os
 from typing import Optional, Dict, Any
 from uuid import uuid4
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Try to import supabase client if available and configured; if not, use an in-memory FakeSupabase
 try:
     from supabase import create_client, Client
-except Exception:
+except Exception as e:
     create_client = None
     Client = None
 
