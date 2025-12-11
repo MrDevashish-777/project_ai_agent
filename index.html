@@ -1,0 +1,591 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Hotel Booking Assistant</title>
+<style>
+    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f4f4f4; margin: 0; padding: 0; }
+    header { background: #2C3E50; color: white; padding: 18px; text-align: center; font-size: 22px; font-weight: bold; }
+    #chatbot-icon { position: fixed; bottom: 25px; right: 25px; background: #2C3E50; color: white; width: 60px; height: 60px; border-radius: 50%; display: flex; justify-content: center; align-items: center; cursor: pointer; font-size: 28px; box-shadow: 0px 4px 10px rgba(0,0,0,0.3); transition: transform 0.2s; }
+    #chatbot-icon:hover { transform: scale(1.1); }
+    #chat-window { position: fixed; bottom: 100px; right: 25px; width: 400px; height: 550px; background: white; border-radius: 12px; box-shadow: 0px 4px 20px rgba(0,0,0,0.3); display: none; flex-direction: column; overflow: hidden; }
+    #chat-header { background: linear-gradient(135deg, #2C3E50 0%, #34495e 100%); color: white; padding: 15px; font-size: 18px; text-align: center; font-weight: bold; }
+    #chat-body { flex: 1; padding: 15px; overflow-y: auto; background: #fafafa; display: flex; flex-direction: column; gap: 10px; }
+    .msg { margin: 0; padding: 10px 14px; border-radius: 12px; max-width: 85%; display: inline-block; word-wrap: break-word; white-space: pre-wrap; }
+    .user { background: #3498db; color: white; align-self: flex-end; border-bottom-right-radius: 4px; }
+    .bot { background: #ecf0f1; color: black; align-self: flex-start; border-bottom-left-radius: 4px; }
+    .meta { font-size: 11px; color: #999; margin-top: 4px; }
+    #chat-input-area { display: flex; border-top: 1px solid #ddd; background: white; }
+    #chat-input { flex: 1; padding: 12px; border: none; outline: none; font-size: 14px; }
+    #chat-input:focus { background: #f9f9f9; }
+    #send-btn { width: 70px; background: #2C3E50; color: white; border: none; cursor: pointer; font-weight: bold; transition: background 0.2s; }
+    #send-btn:hover { background: #34495e; }
+    .suggestions { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+    .suggestion { border: 1px solid #ddd; padding: 10px; border-radius: 10px; background: white; display: flex; justify-content: space-between; align-items: center; transition: background 0.2s; cursor: pointer; }
+    .suggestion:hover { background: #f0f8ff; }
+    .suggestion .meta { margin: 0; font-size: 11px; color: #666; }
+    .s-actions > button { margin-left: 6px; padding: 6px 12px; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; }
+    .s-actions > button:first-child { background: #3498db; color: white; }
+    .s-actions > button:last-child { background: #e74c3c; color: white; }
+    #booking-modal { position: fixed; left: 0; top: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.6); display: none; justify-content: center; align-items: center; z-index: 1000; }
+    #booking-modal .box { background: white; width: 420px; padding: 25px; border-radius: 15px; box-shadow: 0px 8px 30px rgba(0,0,0,0.3); max-height: 90vh; overflow-y: auto; }
+    #booking-modal h3 { margin: 0 0 20px 0; color: #2C3E50; font-size: 22px; text-align: center; }
+    #booking-modal .form-group { margin: 15px 0; }
+    #booking-modal label { display: block; font-size: 13px; font-weight: bold; color: #2C3E50; margin-bottom: 6px; }
+    #booking-modal input, #booking-modal select { width: 100%; padding: 12px; margin: 0; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; box-sizing: border-box; }
+    #booking-modal input:focus, #booking-modal select:focus { border-color: #3498db; outline: none; box-shadow: 0 0 5px rgba(52, 152, 219, 0.3); }
+    .button-group { display: flex; gap: 12px; justify-content: flex-end; margin-top: 25px; }
+    #b-cancel, #b-confirm { padding: 12px 20px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; font-size: 14px; }
+    #b-cancel { background: #95a5a6; color: white; }
+    #b-cancel:hover { background: #7f8c8d; }
+    #b-confirm { background: #27ae60; color: white; }
+    #b-confirm:hover { background: #229954; }
+    .typing { font-style: italic; color: #777; }
+    #notification { position: fixed; top: 20px; right: 20px; background: #27ae60; color: white; padding: 16px 24px; border-radius: 8px; box-shadow: 0px 4px 15px rgba(0,0,0,0.2); display: none; z-index: 2000; animation: slideIn 0.3s ease-out; }
+    @keyframes slideIn { from { transform: translateX(400px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+    @keyframes slideOut { from { transform: translateX(0); opacity: 1; } to { transform: translateX(400px); opacity: 0; } }
+    #notification.hide { animation: slideOut 0.3s ease-out; }
+    #notification.error { background: #e74c3c; }
+    #admin-login-modal { position: fixed; left: 0; top: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.6); display: none; justify-content: center; align-items: center; z-index: 1000; }
+    #admin-login-modal .box { background: white; width: 360px; padding: 30px; border-radius: 15px; box-shadow: 0px 8px 30px rgba(0,0,0,0.3); }
+    #admin-login-modal h2 { margin: 0 0 20px 0; color: #2C3E50; text-align: center; }
+    #admin-login-modal .form-group { margin: 15px 0; }
+    #admin-login-modal input { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; }
+    .admin-buttons { display: flex; gap: 12px; margin-top: 20px; }
+    .admin-buttons button { flex: 1; padding: 12px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; }
+    #admin-login-btn { background: #3498db; color: white; }
+    #admin-close-btn { background: #95a5a6; color: white; }
+    #admin-dashboard { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: white; z-index: 2000; overflow-y: auto; }
+    #admin-dashboard-header { background: #2C3E50; color: white; padding: 20px; display: flex; justify-content: space-between; align-items: center; }
+    #admin-dashboard-content { padding: 20px; max-width: 1200px; margin: 0 auto; }
+    .admin-stat { display: inline-block; background: #ecf0f1; padding: 20px; border-radius: 8px; margin: 10px; text-align: center; }
+    .admin-stat .stat-value { font-size: 28px; font-weight: bold; color: #3498db; }
+    .admin-stat .stat-label { color: #666; font-size: 12px; }
+    .chats-table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+    .chats-table th { background: #34495e; color: white; padding: 12px; text-align: left; }
+    .chats-table td { padding: 12px; border-bottom: 1px solid #ddd; }
+    .chats-table tr:hover { background: #f5f5f5; }
+</style>
+</head>
+<body>
+<header>
+    Nagpur Hotel Booking – Customer Support
+    <div style="position: absolute; right: 20px; top: 18px;">
+        <button id="admin-panel-btn" style="background: #34495e; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-size: 12px;">🔐 Admin</button>
+    </div>
+</header>
+<div id="chatbot-icon">💬</div>
+<div id="chat-window">
+    <div id="chat-header">AI Hotel Assistant</div>
+    <div id="chat-body"></div>
+    <div id="chat-input-area">
+        <input type="text" id="chat-input" placeholder="Type your message..." />
+        <button id="send-btn">Send</button>
+    </div>
+    <div style="font-size:11px;padding:6px;border-top: 1px dashed #eee;background:#fafafa;color:#666">This is a demo. To persist data, configure supabase and add env vars.</div>
+    
+    <!-- Booking modal -->
+    <div id="booking-modal">
+        <div class="box">
+            <h3 id="book-title">Complete Your Booking</h3>
+            <div class="form-group">
+                <label for="b-name">Full Name *</label>
+                <input id="b-name" type="text" placeholder="Enter your full name" />
+            </div>
+            <div class="form-group">
+                <label for="b-phone">Phone Number *</label>
+                <input id="b-phone" type="tel" placeholder="+91 98765 43210" />
+            </div>
+            <div class="form-group">
+                <label for="b-date">Check-in Date *</label>
+                <input id="b-date" type="date" />
+            </div>
+            <div style="display: flex; gap: 12px;">
+                <div class="form-group" style="flex: 1;">
+                    <label for="b-nights">Number of Nights *</label>
+                    <input id="b-nights" type="number" min="1" placeholder="Nights" />
+                </div>
+                <div class="form-group" style="flex: 1;">
+                    <label for="b-visitors">Number of Visitors *</label>
+                    <input id="b-visitors" type="number" min="1" max="10" placeholder="Visitors" value="1" />
+                </div>
+            </div>
+            <div class="button-group">
+                <button id="b-cancel">Cancel</button>
+                <button id="b-confirm">Confirm Booking</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Payment modal -->
+    <div id="payment-modal" style="position: fixed; left: 0; top: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.6); display: none; justify-content: center; align-items: center; z-index: 1000;">
+        <div class="box" style="width: 420px; padding: 25px; border-radius: 15px; background: white; box-shadow: 0px 8px 30px rgba(0,0,0,0.3);">
+            <h3 style="margin: 0 0 20px 0; color: #2C3E50; font-size: 22px; text-align: center;">Payment Details</h3>
+            <div style="background: #f5f5f5; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+                <div style="margin: 10px 0; display: flex; justify-content: space-between;">
+                    <span>Hotel:</span>
+                    <strong id="p-hotel">-</strong>
+                </div>
+                <div style="margin: 10px 0; display: flex; justify-content: space-between;">
+                    <span>Subtotal (₹):</span>
+                    <strong id="p-subtotal">0</strong>
+                </div>
+                <div style="margin: 10px 0; display: flex; justify-content: space-between;">
+                    <span>GST (18%):</span>
+                    <strong id="p-gst">0</strong>
+                </div>
+                <hr style="margin: 15px 0; border: none; border-top: 1px solid #ddd;">
+                <div style="margin: 10px 0; display: flex; justify-content: space-between; font-size: 18px;">
+                    <span><strong>Total Amount (₹):</strong></span>
+                    <strong id="p-total" style="color: #27ae60;">0</strong>
+                </div>
+            </div>
+            <div id="p-payment-url" style="margin: 15px 0; padding: 12px; background: #e8f5e9; border-radius: 8px; text-align: center; display: none;">
+                <p style="margin: 0 0 10px 0; color: #666;">Payment Gateway:</p>
+                <a id="p-payment-link" href="#" target="_blank" style="display: inline-block; padding: 10px 20px; background: #27ae60; color: white; text-decoration: none; border-radius: 6px; font-weight: bold;">Click to Pay</a>
+            </div>
+            <div style="display: flex; gap: 12px; justify-content: flex-end; margin-top: 25px;">
+                <button id="p-cancel" style="padding: 12px 20px; border: none; border-radius: 8px; background: #95a5a6; color: white; cursor: pointer; font-weight: bold;">Cancel</button>
+                <button id="p-confirm" style="padding: 12px 20px; border: none; border-radius: 8px; background: #27ae60; color: white; cursor: pointer; font-weight: bold;">Proceed to Payment</button>
+            </div>
+        </div>
+    </div>
+    
+    <div id="notification"></div>
+</div>
+
+<!-- Admin Login Modal -->
+<div id="admin-login-modal">
+    <div class="box">
+        <h2>Admin Login</h2>
+        <div class="form-group">
+            <label for="admin-username">Username</label>
+            <input id="admin-username" type="text" placeholder="Username" />
+        </div>
+        <div class="form-group">
+            <label for="admin-password">Password</label>
+            <input id="admin-password" type="password" placeholder="Password" />
+        </div>
+        <div class="admin-buttons">
+            <button id="admin-login-btn">Login</button>
+            <button id="admin-close-btn">Cancel</button>
+        </div>
+    </div>
+</div>
+
+<!-- Admin Dashboard -->
+<div id="admin-dashboard">
+    <div id="admin-dashboard-header">
+        <h1>📊 Admin Dashboard</h1>
+        <button id="admin-logout-btn" style="background: #e74c3c; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer;">Logout</button>
+    </div>
+    <div id="admin-dashboard-content">
+        <h2>Conversation Analytics</h2>
+        <div>
+            <div class="admin-stat">
+                <div class="stat-value" id="admin-total-chats">0</div>
+                <div class="stat-label">Total Conversations</div>
+            </div>
+            <div class="admin-stat">
+                <div class="stat-value" id="admin-active-users">0</div>
+                <div class="stat-label">Active Users</div>
+            </div>
+        </div>
+        <h3>Recent Conversations</h3>
+        <table class="chats-table">
+            <thead>
+                <tr>
+                    <th>User ID</th>
+                    <th>Role</th>
+                    <th>Message Preview</th>
+                    <th>Timestamp</th>
+                </tr>
+            </thead>
+            <tbody id="admin-chats-tbody">
+                <tr><td colspan="4" style="text-align: center; padding: 20px;">Loading conversations...</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+    const icon = document.getElementById('chatbot-icon');
+    const chatWindow = document.getElementById('chat-window');
+    const sendBtn = document.getElementById('send-btn');
+    const input = document.getElementById('chat-input');
+    const chatBody = document.getElementById('chat-body');
+    const BASE = 'http://127.0.0.1:8000';
+    let userPreferences = { nights: null, budget: null };
+    let adminToken = null;
+    
+    function getUserId() {
+        let id = localStorage.getItem('ai_user_id');
+        if (!id) {
+            id = 'u' + Math.random().toString(36).slice(2,10);
+            localStorage.setItem('ai_user_id', id);
+        }
+        return id;
+    }
+    
+    function showAdminLogin() {
+        document.getElementById('admin-login-modal').style.display = 'flex';
+        document.getElementById('admin-username').focus();
+    }
+    
+    function closeAdminLogin() {
+        document.getElementById('admin-login-modal').style.display = 'none';
+        document.getElementById('admin-username').value = '';
+        document.getElementById('admin-password').value = '';
+    }
+    
+    function closeAdminDashboard() {
+        document.getElementById('admin-dashboard').style.display = 'none';
+        adminToken = null;
+    }
+    
+    async function performAdminLogin() {
+        const username = document.getElementById('admin-username').value.trim();
+        const password = document.getElementById('admin-password').value;
+        
+        if (!username || !password) {
+            showNotification('Please enter username and password', true);
+            return;
+        }
+        
+        try {
+            const res = await fetch(`${BASE}/admin/login`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, password })
+            });
+            
+            if (!res.ok) {
+                showNotification('Invalid credentials', true);
+                return;
+            }
+            
+            const data = await res.json();
+            adminToken = data.token;
+            closeAdminLogin();
+            showAdminDashboard();
+            showNotification('Logged in as admin', false);
+        } catch (err) {
+            showNotification('Login failed: ' + err.message, true);
+        }
+    }
+    
+    async function showAdminDashboard() {
+        document.getElementById('admin-dashboard').style.display = 'block';
+        await loadAdminData();
+    }
+    
+    async function loadAdminData() {
+        try {
+            const res = await fetch(`${BASE}/admin/chats?limit=20`, {
+                headers: { 'Authorization': `Bearer ${adminToken}` }
+            });
+            
+            if (!res.ok) {
+                showNotification('Failed to load admin data', true);
+                return;
+            }
+            
+            const data = await res.json();
+            const tbody = document.getElementById('admin-chats-tbody');
+            tbody.innerHTML = '';
+            
+            if (data.conversations && data.conversations.length > 0) {
+                const uniqueUsers = new Set(data.conversations.map(c => c.user_id));
+                document.getElementById('admin-total-chats').textContent = data.count;
+                document.getElementById('admin-active-users').textContent = uniqueUsers.size;
+                
+                data.conversations.forEach(conv => {
+                    const row = document.createElement('tr');
+                    const timestamp = conv.created_at ? new Date(conv.created_at).toLocaleString() : 'N/A';
+                    const preview = (conv.message || '').substring(0, 60).replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                    row.innerHTML = `
+                        <td>${conv.user_id}</td>
+                        <td><strong>${conv.role}</strong></td>
+                        <td>${preview}${preview.length > 60 ? '...' : ''}</td>
+                        <td>${timestamp}</td>
+                    `;
+                    tbody.appendChild(row);
+                });
+            } else {
+                tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; padding: 20px;">No conversations found</td></tr>';
+            }
+        } catch (err) {
+            showNotification('Error loading data: ' + err.message, true);
+        }
+    }
+
+    function showNotification(message, isError = false) {
+        const notif = document.getElementById('notification');
+        notif.textContent = message;
+        notif.className = isError ? 'error' : '';
+        notif.style.display = 'block';
+        setTimeout(() => {
+            notif.classList.add('hide');
+            setTimeout(() => {
+                notif.style.display = 'none';
+                notif.classList.remove('hide');
+            }, 300);
+        }, 3000);
+    }
+
+    function addMessage(text, type='bot', meta=null) {
+        const div = document.createElement('div');
+        const p = document.createElement('div');
+        p.className='msg ' + (type==='user'?'user':'bot');
+        p.textContent = text;
+        div.appendChild(p);
+        if (meta && meta.suggestions) {
+            const s = document.createElement('div'); s.className='suggestions';
+            for (const h of meta.suggestions) {
+                const el = createSuggestionItem(h);
+                s.appendChild(el);
+            }
+            div.appendChild(s);
+        }
+        chatBody.appendChild(div);
+        chatBody.scrollTop = chatBody.scrollHeight;
+    }
+
+    function showTyping() {
+        const d = document.createElement('div');
+        d.id = 'typing-indicator';
+        d.className = 'msg bot typing';
+        d.textContent = 'Bot is typing...';
+        chatBody.appendChild(d);
+        chatBody.scrollTop = chatBody.scrollHeight;
+        return d;
+    }
+
+    function removeTyping(d) { if (d && d.parentNode) d.parentNode.removeChild(d); }
+
+    function createSuggestionItem(hotel) {
+        const card = document.createElement('div');
+        card.className = 'suggestion';
+        const left = document.createElement('div');
+        left.innerHTML = `<b>${hotel.name}</b><div class='meta'>id: ${hotel.id} · ₹${hotel.price_per_night} · ⭐${hotel.rating}</div>`;
+        const actions = document.createElement('div'); actions.className='s-actions';
+        const selectBtn = document.createElement('button'); selectBtn.textContent='Select';
+        selectBtn.onclick = () => { sendChat(`${hotel.id}`); };
+        const bookBtn = document.createElement('button'); bookBtn.textContent='Book';
+        bookBtn.onclick = () => { openBookingModal(hotel); };
+        actions.appendChild(selectBtn); actions.appendChild(bookBtn);
+        card.appendChild(left); card.appendChild(actions);
+        return card;
+    }
+
+    function sendChat(message) {
+        if (!message || !message.trim()) return;
+        addMessage(message, 'user');
+        input.value='';
+        const t = showTyping();
+        const payload = { user_id: getUserId(), message };
+        fetch(`${BASE}/chat`, { method:'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+            .then(r => r.json())
+            .then(data => {
+                removeTyping(t);
+                addMessage(data.reply, 'bot', { suggestions: data.suggestions || [] });
+                if (data.suggestions && data.suggestions.length > 0) {
+                    data.suggestions.forEach(s => {
+                        if (s.price_per_night) userPreferences.budget = s.price_per_night;
+                    });
+                }
+            })
+            .catch(err => {
+                removeTyping(t);
+                addMessage('⚠️ Error connecting to server: ' + (err.message||err), 'bot');
+                showNotification('Connection error! Please try again.', true);
+            });
+    }
+
+    let pendingBookingData = null;
+    
+    async function performBook(name, phone, hotel_id, checkin_date, nights, visitors) {
+        const payload = { name, phone, hotel_id, checkin_date, nights, visitors, user_id: getUserId() };
+        try {
+            const res = await fetch(`${BASE}/book`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+            if (!res.ok) {
+                const text = await res.text();
+                addMessage('❌ Booking failed: ' + text, 'bot');
+                showNotification('Booking failed!', true);
+                return;
+            }
+            const data = await res.json();
+            pendingBookingData = data;
+            addMessage(data.bill, 'bot');
+            showPaymentModal(data);
+            showNotification('Opening payment details...', false);
+        } catch (err) {
+            addMessage('❌ Booking error: ' + err.message, 'bot');
+            showNotification('Booking error!', true);
+        }
+    }
+    
+    async function showPaymentModal(bookingData) {
+        const modal = document.getElementById('payment-modal');
+        const subtotal = bookingData.total_price;
+        const gst = subtotal * 0.18;
+        const total = subtotal + gst;
+        
+        document.getElementById('p-hotel').textContent = bookingData.hotel.name;
+        document.getElementById('p-subtotal').textContent = subtotal.toFixed(2);
+        document.getElementById('p-gst').textContent = gst.toFixed(2);
+        document.getElementById('p-total').textContent = total.toFixed(2);
+        
+        modal.style.display = 'flex';
+    }
+    
+    async function proceedToPayment(bookingData) {
+        const subtotal = bookingData.total_price;
+        const gst = subtotal * 0.18;
+        const total = subtotal + gst;
+        
+        try {
+            addMessage('💳 Creating payment intent...', 'bot');
+            const paymentRes = await fetch(`${BASE}/internal/payment_intent`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    amount_inr: Math.round(total),
+                    currency: 'INR',
+                    description: `Booking for ${bookingData.hotel.name}`,
+                    booking_id: bookingData.booking_id
+                })
+            });
+            
+            if (!paymentRes.ok) {
+                throw new Error('Payment intent creation failed');
+            }
+            
+            const paymentData = await paymentRes.json();
+            document.getElementById('p-payment-link').href = paymentData.payment_url;
+            document.getElementById('p-payment-url').style.display = 'block';
+            
+            addMessage('✅ Payment gateway ready! Click the payment link to complete payment.', 'bot');
+            showNotification('Payment intent created. Click the payment link!', false);
+            
+            setTimeout(() => generateInvoice(bookingData.booking_id), 2000);
+        } catch (err) {
+            addMessage('❌ Payment error: ' + err.message, 'bot');
+            showNotification('Payment setup failed!', true);
+        }
+    }
+    
+    async function generateInvoice(bookingId) {
+        try {
+            const invoiceRes = await fetch(`${BASE}/internal/generate_invoice`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    booking_id: bookingId,
+                    gst_percent: 18
+                })
+            });
+            
+            if (!invoiceRes.ok) {
+                throw new Error('Invoice generation failed');
+            }
+            
+            const invoiceData = await invoiceRes.json();
+            addMessage(`📄 Invoice generated: ${invoiceData.invoice_id}`, 'bot');
+            addMessage('✅ Booking complete! Check your email for invoice and payment details.', 'bot');
+        } catch (err) {
+            console.log('Note: Invoice generation skipped - ' + err.message);
+        }
+    }
+    
+    function closePaymentModal() {
+        document.getElementById('payment-modal').style.display = 'none';
+        pendingBookingData = null;
+    }
+
+    const modal = document.getElementById('booking-modal');
+    const bName = document.getElementById('b-name');
+    const bPhone = document.getElementById('b-phone');
+    const bDate = document.getElementById('b-date');
+    const bNights = document.getElementById('b-nights');
+    const bVisitors = document.getElementById('b-visitors');
+    const bCancel = document.getElementById('b-cancel');
+    const bConfirm = document.getElementById('b-confirm');
+    let pendingHotel = null;
+
+    function openBookingModal(hotel) {
+        pendingHotel = hotel;
+        document.getElementById('book-title').textContent = `Complete Booking: ${hotel.name}`;
+        bDate.value = '';
+        bName.value = '';
+        bPhone.value = '';
+        bNights.value = userPreferences.nights || 1;
+        bVisitors.value = 1;
+        modal.style.display = 'flex';
+        addMessage(`📋 Opening booking form for ${hotel.name}...`, 'bot');
+    }
+
+    function closeBookingModal() {
+        modal.style.display = 'none';
+        pendingHotel = null;
+    }
+
+    bCancel.onclick = () => {
+        closeBookingModal();
+        addMessage('❌ Booking cancelled.', 'bot');
+    };
+
+    bConfirm.onclick = () => {
+        const name = bName.value.trim();
+        const phone = bPhone.value.trim();
+        const date = bDate.value;
+        const nights = parseInt(bNights.value || '1');
+        const visitors = parseInt(bVisitors.value || '1');
+
+        if (!name || !phone || !date || !nights || !visitors || !pendingHotel) {
+            showNotification('❌ Please fill in all fields!', true);
+            return;
+        }
+
+        userPreferences.nights = nights;
+        closeBookingModal();
+        addMessage(`🔄 Processing booking for ${pendingHotel.name}...`, 'user');
+        performBook(name, phone, pendingHotel.id, date, nights, visitors);
+    };
+
+    icon.onclick = () => {
+        chatWindow.style.display = chatWindow.style.display === 'flex' ? 'none' : 'flex';
+        chatWindow.style.flexDirection = 'column';
+    };
+
+    sendBtn.onclick = () => { sendChat(input.value.trim()); };
+    input.addEventListener('keypress', (e) => { if (e.key === 'Enter') sendChat(input.value.trim()); });
+    
+    document.getElementById('admin-panel-btn').onclick = () => { showAdminLogin(); };
+    document.getElementById('admin-login-btn').onclick = () => { performAdminLogin(); };
+    document.getElementById('admin-close-btn').onclick = () => { closeAdminLogin(); };
+    document.getElementById('admin-logout-btn').onclick = () => { closeAdminDashboard(); };
+    
+    document.getElementById('admin-username').addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') performAdminLogin();
+    });
+    document.getElementById('admin-password').addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') performAdminLogin();
+    });
+    
+    document.getElementById('p-cancel').onclick = () => {
+        closePaymentModal();
+        addMessage('❌ Payment cancelled.', 'bot');
+    };
+    
+    document.getElementById('p-confirm').onclick = () => {
+        if (pendingBookingData) {
+            proceedToPayment(pendingBookingData);
+        }
+    };
+
+    window.addEventListener('DOMContentLoaded', () => { sendChat('Hi'); });
+</script>
+</body>
+</html>

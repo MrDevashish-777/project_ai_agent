@@ -207,7 +207,6 @@ test_output/
 outputs/
 outputs.json
 *.snapshot
-*.html
 ui_*.html
 screenshots/
 *.png
