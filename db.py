@@ -42,6 +42,8 @@ class FakeTable:
         return self
 
     def order(self, col, desc=False, ascending=None):
+        if not col:
+            raise ValueError("order() column cannot be empty")
         self._order_by = col
         if ascending is not None:
             self._order_desc = not ascending
@@ -57,6 +59,8 @@ class FakeTable:
         try:
             if hasattr(self, '_insert_payload') and self._insert_payload is not None:
                 payload = self._insert_payload
+                if not isinstance(payload, dict):
+                    raise ValueError("Insert payload must be a dictionary")
                 if "id" not in payload:
                     payload = {**payload, "id": str(uuid4())}
                 if "created_at" not in payload:
@@ -67,21 +71,35 @@ class FakeTable:
                 return FakeResponse([payload])
             
             table = list(self._storage.get(self._name, []))
+            if not isinstance(table, list):
+                raise ValueError(f"Table '{self._name}' data is corrupted")
+            
             for col, val in self._filters:
+                if not col:
+                    raise ValueError("Filter column name cannot be empty")
                 table = [r for r in table if r.get(col) == val]
             
             if self._order_by:
+                valid_cols = set()
+                if table:
+                    valid_cols = set(table[0].keys())
+                    if self._order_by not in valid_cols:
+                        raise ValueError(f"Column '{self._order_by}' does not exist in table '{self._name}'. Available columns: {', '.join(valid_cols)}")
                 try:
-                    table.sort(key=lambda x: x.get(self._order_by, ''), reverse=self._order_desc)
+                    table.sort(key=lambda x: (x.get(self._order_by) is None, x.get(self._order_by, '')), reverse=self._order_desc)
                 except Exception as e:
                     raise ValueError(f"Error ordering by column '{self._order_by}': {str(e)}")
             
             if self._limit:
+                if self._limit < 0:
+                    raise ValueError("Limit must be non-negative")
                 table = table[: self._limit]
             
             return FakeResponse(table)
+        except ValueError as e:
+            raise ValueError(f"Query error in table '{self._name}': {str(e)}")
         except Exception as e:
-            raise Exception(f"Database query error in table '{self._name}': {str(e)}")
+            raise Exception(f"Unexpected database error in table '{self._name}': {str(e)}")
 
 class FakeSupabase:
     def __init__(self):

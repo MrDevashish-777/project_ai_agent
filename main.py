@@ -1,5 +1,6 @@
 import os
 import logging
+import json
 from datetime import datetime, timedelta
 from fastapi import FastAPI, HTTPException, Header, Request
 from fastapi.responses import JSONResponse
@@ -23,11 +24,49 @@ load_dotenv()
 
 app = FastAPI(title="Nagpur Hotel AI Agent")
 
+class StructuredLogger:
+    """Enhanced logging with structured JSON support for audit trails."""
+    def __init__(self, name):
+        self.logger = logging.getLogger(name)
+        self.setup_logging()
+    
+    def setup_logging(self):
+        handler = logging.StreamHandler()
+        formatter = logging.Formatter(
+            '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+        )
+        handler.setFormatter(formatter)
+        self.logger.addHandler(handler)
+        self.logger.setLevel(logging.INFO)
+    
+    def log_action(self, action, user_id, resource_type, resource_id, status, details=None):
+        """Log structured action for audit trail."""
+        log_entry = {
+            "timestamp": datetime.now().isoformat(),
+            "action": action,
+            "user_id": user_id,
+            "resource_type": resource_type,
+            "resource_id": resource_id,
+            "status": status,
+            "details": details or {}
+        }
+        self.logger.info(json.dumps(log_entry))
+        return log_entry
+    
+    def info(self, msg):
+        self.logger.info(msg)
+    
+    def warning(self, msg):
+        self.logger.warning(msg)
+    
+    def error(self, msg, exc_info=False):
+        self.logger.error(msg, exc_info=exc_info)
+
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
-logger = logging.getLogger(__name__)
+logger = StructuredLogger(__name__)
 
 ALLOWED_ORIGINS = [
     "http://localhost:3000",
@@ -85,9 +124,25 @@ async def chat(req: ChatRequest):
         db.save_conversation(user_id, "user", req.message, meta={})
         reply, suggestions, meta = bot_reply(req.message, user_id=user_id)
         db.save_conversation(user_id, "bot", reply, meta=meta)
+        logger.log_action(
+            action="CHAT_MESSAGE",
+            user_id=user_id,
+            resource_type="chat",
+            resource_id=user_id,
+            status="success",
+            details={"message_length": len(req.message), "has_suggestions": len(suggestions or []) > 0}
+        )
         return ChatResponse(reply=reply, suggestions=suggestions, meta=meta)
     except Exception as e:
-        logger.error(f"Chat error: {e}")
+        logger.error(f"Chat error: {e}", exc_info=True)
+        logger.log_action(
+            action="CHAT_MESSAGE",
+            user_id=req.user_id or "unknown",
+            resource_type="chat",
+            resource_id="unknown",
+            status="error",
+            details={"error": str(e)}
+        )
         raise HTTPException(status_code=500, detail="Chat processing failed")
 
 @app.post("/internal/search_hotels")
@@ -100,10 +155,25 @@ async def search_hotels(req: InternalSearchHotelsRequest):
             amenities=req.amenities,
             limit=req.limit
         )
-        logger.info(f"Search returned {len(results)} hotels")
+        logger.log_action(
+            action="HOTEL_SEARCH",
+            user_id=None,
+            resource_type="search",
+            resource_id=str(uuid.uuid4()),
+            status="success",
+            details={"results_count": len(results), "max_price": req.max_price, "location": req.location}
+        )
         return {"count": len(results), "hotels": results}
     except Exception as e:
-        logger.error(f"Search error: {e}")
+        logger.error(f"Search error: {e}", exc_info=True)
+        logger.log_action(
+            action="HOTEL_SEARCH",
+            user_id=None,
+            resource_type="search",
+            resource_id="unknown",
+            status="error",
+            details={"error": str(e)}
+        )
         raise HTTPException(status_code=400, detail=str(e))
 
 @app.post("/internal/confirm_booking")
@@ -157,6 +227,14 @@ async def book_hotel_internal(req: InternalBookHotelRequest):
         )
         if not is_valid:
             logger.warning(f"Invalid booking input: {error}")
+            logger.log_action(
+                action="BOOKING_ATTEMPT",
+                user_id=req.user_id,
+                resource_type="booking",
+                resource_id="unknown",
+                status="validation_failed",
+                details={"error": error}
+            )
             raise HTTPException(status_code=400, detail=error)
         
         hotel = get_hotel_by_id(req.hotel_id)
@@ -189,7 +267,19 @@ async def book_hotel_internal(req: InternalBookHotelRequest):
             }
         )
         
-        logger.info(f"Booking created: {booking_id} for user {user_id} at {hotel['name']}")
+        logger.log_action(
+            action="BOOKING_CREATED",
+            user_id=user_id,
+            resource_type="booking",
+            resource_id=booking_id,
+            status="success",
+            details={
+                "hotel_name": hotel["name"],
+                "nights": req.nights,
+                "visitors": req.visitors,
+                "total_price": total_price
+            }
+        )
         
         return {
             "status": "success",
@@ -201,6 +291,14 @@ async def book_hotel_internal(req: InternalBookHotelRequest):
         raise
     except Exception as e:
         logger.error(f"Booking error: {e}", exc_info=True)
+        logger.log_action(
+            action="BOOKING_CREATED",
+            user_id=req.user_id or "unknown",
+            resource_type="booking",
+            resource_id="unknown",
+            status="error",
+            details={"error": str(e)}
+        )
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/internal/payment_intent")
@@ -311,6 +409,14 @@ async def admin_login(req: AdminLoginRequest):
     try:
         if req.username != ADMIN_USERNAME or req.password != ADMIN_PASSWORD:
             logger.warning(f"Failed admin login attempt for user: {req.username}")
+            logger.log_action(
+                action="ADMIN_LOGIN",
+                user_id=req.username,
+                resource_type="admin",
+                resource_id=req.username,
+                status="failed",
+                details={"reason": "invalid_credentials"}
+            )
             create_audit_log(
                 action="ADMIN_LOGIN_FAILED",
                 user_id=None,
@@ -326,6 +432,15 @@ async def admin_login(req: AdminLoginRequest):
             "expires_at": datetime.now() + timedelta(hours=2)
         }
         
+        logger.log_action(
+            action="ADMIN_LOGIN",
+            user_id=req.username,
+            resource_type="admin",
+            resource_id=req.username,
+            status="success",
+            details={"token_generated": True, "expires_in_hours": 2}
+        )
+        
         create_audit_log(
             action="ADMIN_LOGIN_SUCCESS",
             user_id=req.username,
@@ -334,12 +449,19 @@ async def admin_login(req: AdminLoginRequest):
             details={"token_created": datetime.now().isoformat()}
         )
         
-        logger.info(f"Admin login successful for user: {req.username}")
         return {"status": "success", "token": token, "expires_in": 7200}
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Admin login error: {e}", exc_info=True)
+        logger.log_action(
+            action="ADMIN_LOGIN",
+            user_id=req.username or "unknown",
+            resource_type="admin",
+            resource_id="unknown",
+            status="error",
+            details={"error": str(e)}
+        )
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/admin/chats")
@@ -347,17 +469,41 @@ async def fetch_chats(limit: int = 50, authorization: str = Header(None)):
     try:
         if not authorization or not authorization.startswith("Bearer "):
             logger.warning("Fetch chats attempt without valid authorization")
+            logger.log_action(
+                action="ADMIN_FETCH_CHATS",
+                user_id=None,
+                resource_type="admin",
+                resource_id="fetch_chats",
+                status="failed",
+                details={"reason": "missing_token"}
+            )
             raise HTTPException(status_code=401, detail="Missing or invalid token")
         
         token = authorization.split(" ")[1]
         if token not in ADMIN_TOKENS:
             logger.warning(f"Fetch chats attempt with invalid token")
+            logger.log_action(
+                action="ADMIN_FETCH_CHATS",
+                user_id=None,
+                resource_type="admin",
+                resource_id="fetch_chats",
+                status="failed",
+                details={"reason": "invalid_token"}
+            )
             raise HTTPException(status_code=401, detail="Invalid token")
         
         token_data = ADMIN_TOKENS[token]
         if datetime.now() > token_data["expires_at"]:
             del ADMIN_TOKENS[token]
             logger.warning(f"Fetch chats attempt with expired token")
+            logger.log_action(
+                action="ADMIN_FETCH_CHATS",
+                user_id=None,
+                resource_type="admin",
+                resource_id="fetch_chats",
+                status="failed",
+                details={"reason": "token_expired"}
+            )
             raise HTTPException(status_code=401, detail="Token expired")
         
         conversations = db.supabase.table("conversations").select("*").limit(limit).order("created_at", desc=True).execute()
@@ -374,6 +520,15 @@ async def fetch_chats(limit: int = 50, authorization: str = Header(None)):
             }
             safe_conversations.append(safe_conv)
         
+        logger.log_action(
+            action="ADMIN_FETCH_CHATS",
+            user_id=None,
+            resource_type="admin",
+            resource_id="fetch_chats",
+            status="success",
+            details={"conversation_count": len(safe_conversations), "limit": limit}
+        )
+        
         create_audit_log(
             action="ADMIN_FETCH_CHATS",
             user_id=None,
@@ -382,12 +537,77 @@ async def fetch_chats(limit: int = 50, authorization: str = Header(None)):
             details={"conversation_count": len(safe_conversations), "limit": limit}
         )
         
-        logger.info(f"Admin fetched {len(safe_conversations)} conversations")
         return {"conversations": safe_conversations, "count": len(safe_conversations)}
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Fetch chats error: {e}", exc_info=True)
+        logger.log_action(
+            action="ADMIN_FETCH_CHATS",
+            user_id=None,
+            resource_type="admin",
+            resource_id="fetch_chats",
+            status="error",
+            details={"error": str(e)}
+        )
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/book")
+async def book(req: InternalBookHotelRequest):
+    """Legacy /book endpoint for backwards compatibility with frontend."""
+    try:
+        is_valid, error = validate_booking_input(
+            req.name, req.phone, req.checkin_date, req.nights, req.visitors
+        )
+        if not is_valid:
+            logger.warning(f"Invalid booking input: {error}")
+            raise HTTPException(status_code=400, detail=error)
+        
+        hotel = get_hotel_by_id(req.hotel_id)
+        if not hotel:
+            logger.warning(f"Hotel not found: {req.hotel_id}")
+            raise HTTPException(status_code=404, detail="Hotel not found")
+        
+        user = db.upsert_user(req.name, req.phone)
+        user_id = user.get("id")
+        total_price = hotel["price_per_night"] * req.nights
+        
+        booking = db.create_booking(
+            user_id, req.hotel_id, hotel["name"],
+            req.checkin_date, req.nights, total_price, req.visitors
+        )
+        
+        booking_id = booking["id"]
+        
+        create_audit_log(
+            action="BOOKING_CREATED",
+            user_id=user_id,
+            resource_type="booking",
+            resource_id=booking_id,
+            details={
+                "hotel_name": hotel["name"],
+                "checkin_date": req.checkin_date,
+                "nights": req.nights,
+                "visitors": req.visitors,
+                "total_price": total_price
+            }
+        )
+        
+        bill_text = generate_bill(hotel, req.nights, req.name, booking_id)
+        
+        logger.info(f"Booking created via /book: {booking_id}")
+        
+        return {
+            "status": "success",
+            "booking_id": booking_id,
+            "bill": bill_text,
+            "total_price": total_price,
+            "hotel": hotel
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Booking error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/hotels")

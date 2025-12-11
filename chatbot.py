@@ -94,8 +94,8 @@ def prepare_booking_confirmation(user_id: str, name: str, phone: str, hotel_id: 
     
     total_price = hotel["price_per_night"] * nights
     
-    summary = format_booking_summary(hotel, nights, total_price, name)
-    confirmation_text = summary + "\n🔒 Is this correct? Please confirm by saying 'yes' or 'confirm'."
+    summary = format_booking_summary(hotel, nights, total_price, name, checkin_date)
+    confirmation_text = summary + "\n\n🔐 **Confirm booking? Please reply 'yes' to confirm or 'no' to cancel.**"
     
     booking_data = {
         "user_id": user_id,
@@ -137,7 +137,7 @@ def generate_bill(hotel: dict, nights: int, guest_name: str, booking_id: str) ->
 """
     return bill
 
-def format_booking_summary(hotel: dict, nights: int, total_price: float, name: str = None) -> str:
+def format_booking_summary(hotel: dict, nights: int, total_price: float, name: str = None, checkin_date: str = None) -> str:
     """Format booking details summary for user confirmation per spec."""
     price_per_night = hotel["price_per_night"]
     subtotal = total_price
@@ -150,23 +150,28 @@ def format_booking_summary(hotel: dict, nights: int, total_price: float, name: s
 🏨 Hotel Name: {hotel['name']}
 📍 Location: {hotel['area']}
 ⭐ Rating: {hotel['rating']}/5.0
-
+"""
+    
+    if name:
+        summary += f"👤 Guest Name: {name}\n"
+    
+    if checkin_date:
+        summary += f"📅 Check-in Date: {checkin_date}\n"
+    
+    summary += f"""
 💰 Pricing Breakdown:
   • Price per night: ₹{price_per_night:,.2f}
   • Number of nights: {nights}
   ┌─────────────────────────────────┐
   • Subtotal (Before Taxes): ₹{subtotal:,.2f}
-  ┌─────────────────────────────────┐
   
-📊 Taxes:
+📊 Taxes & Total:
   • GST (18%): ₹{tax:,.2f}
   
 💳 Final Amount:
   ✅ TOTAL AMOUNT DUE: ₹{total_with_tax:,.2f}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 """
-    if name:
-        summary = f"👤 Guest: {name}\n\n" + summary
     
     return summary
 
@@ -270,20 +275,28 @@ def bot_reply(user_msg: str, user_id: str = None) -> Tuple[str, Optional[List[di
         state = booking_state[user_id]
         
         if state["step"] == "confirm_summary":
-            if any(w in lower for w in ["yes", "confirm", "ok", "proceed", "book it", "go ahead"]):
-                reply = "✅ Perfect! Redirecting to payment. Your booking will be confirmed once payment is complete."
+            yes_keywords = ["yes", "confirm", "ok", "proceed", "book it", "go ahead", "yep", "yeah"]
+            no_keywords = ["no", "cancel", "back", "change", "nope", "decline"]
+            
+            matches_yes = any(w in lower for w in yes_keywords)
+            matches_no = any(w in lower for w in no_keywords)
+            
+            if matches_yes and not matches_no:
+                reply = "✅ Perfect! Your booking is confirmed. Redirecting to payment. Your booking will be completed once payment is processed."
                 meta["action"] = "proceed_to_payment"
                 meta["booking"] = state["booking_data"]
+                meta["booking_confirmed"] = True
                 del booking_state[user_id]
                 return reply, None, meta
             
-            elif any(w in lower for w in ["no", "cancel", "back", "change"]):
+            elif matches_no and not matches_yes:
                 del booking_state[user_id]
-                reply = "Understood! Let me help you search for different hotels. What's your new budget?"
+                reply = "❌ Booking cancelled. No charges will be made. Let me help you search for different hotels. What's your budget per night?"
+                user_preferences[user_id]["selected_hotel"] = None
                 return reply, None, meta
             
             else:
-                reply = "Please confirm your booking by saying 'yes' or 'confirm', or say 'no' to cancel and search again."
+                reply = "Please confirm by typing 'yes' to proceed with the booking, or 'no' to cancel."
                 return reply, None, meta
         
         elif state["step"] == "collect_name":
@@ -318,9 +331,7 @@ def bot_reply(user_msg: str, user_id: str = None) -> Tuple[str, Optional[List[di
                     user_id, state["name"], state["phone"], state["hotel_id"], state["checkin_date"], state["nights"]
                 )
                 state["booking_data"] = booking_data
-                
-                confirmation_msg = summary + "\n\n🔒 **Is this correct? Please confirm by saying 'yes' to proceed with the booking, or 'no' to go back.**"
-                return confirmation_msg, None, meta
+                return summary, None, meta
             else:
                 reply = "Please provide a valid date in YYYY-MM-DD format (e.g., 2025-12-25)."
                 return reply, None, meta
