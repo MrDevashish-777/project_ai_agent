@@ -2,6 +2,19 @@ from typing import Tuple, List, Optional, Dict
 import re
 from datetime import datetime
 from hotels_data import HOTELS
+import os
+import google.generativeai as genai
+from dotenv import load_dotenv
+
+load_dotenv()
+
+# Initialize Gemini API
+GEMINI_KEY = os.getenv("GEMINIE_KEY")  # Note: key is spelled GEMINIE in .env
+if GEMINI_KEY:
+    genai.configure(api_key=GEMINI_KEY)
+    gemini_model = genai.GenerativeModel('gemini-2.5-flash')
+else:
+    gemini_model = None
 
 user_preferences = {}
 booking_in_progress = {}
@@ -174,6 +187,30 @@ def format_booking_summary(hotel: dict, nights: int, total_price: float, name: s
 """
     
     return summary
+
+def call_gemini_api(message: str, context: str = "") -> Optional[str]:
+    """Call Gemini API for intelligent response generation."""
+    if not gemini_model:
+        return None
+    
+    try:
+        # Build context for Gemini about the hotel booking domain
+        system_prompt = """You are a helpful Hotel Booking Assistant for Nagpur hotels. 
+You help customers find and book hotels in Nagpur with a focus on:
+- Budget-friendly options
+- Various locations in Nagpur (Sitabuldi, Wardha Road, Ramdas Peth, etc.)
+- Professional and friendly service
+Respond naturally and helpfully. Keep responses concise (1-2 sentences)."""
+        
+        full_message = f"{system_prompt}\n\nCustomer: {message}"
+        if context:
+            full_message = f"{system_prompt}\n\nContext: {context}\n\nCustomer: {message}"
+        
+        response = gemini_model.generate_content(full_message)
+        return response.text if response and response.text else None
+    except Exception as e:
+        print(f"Gemini API Error: {e}")
+        return None
 
 def bot_reply(user_msg: str, user_id: str = None) -> Tuple[str, Optional[List[dict]], dict]:
     lower = user_msg.lower()
@@ -366,4 +403,10 @@ def bot_reply(user_msg: str, user_id: str = None) -> Tuple[str, Optional[List[di
         reply = f"You're looking for a hotel under ₹{pref['budget']}/night for {pref['nights']} nights. Would you like me to show you the available hotels?"
         return reply, None, meta
     
-    return "I'm here to help you book a hotel! Tell me your budget (e.g., '₹3000') and number of nights (e.g., '3 nights'), or search by saying 'show hotels'.", None, meta
+    # Try Gemini for general questions not related to hotel booking
+    context = f"User has budget preference: ₹{pref.get('budget', 'Not set')}/night, Nights: {pref.get('nights', 'Not set')}"
+    gemini_response = call_gemini_api(user_msg, context)
+    if gemini_response:
+        meta["ai_powered"] = True
+        return gemini_response, None, meta
+    
