@@ -1,596 +1,454 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Hotel Booking Assistant</title>
-<style>
-    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f4f4f4; margin: 0; padding: 0; }
-    header { background: #2C3E50; color: white; padding: 18px; text-align: center; font-size: 22px; font-weight: bold; }
-    #chatbot-icon { position: fixed; bottom: 25px; right: 25px; background: #2C3E50; color: white; width: 60px; height: 60px; border-radius: 50%; display: flex; justify-content: center; align-items: center; cursor: pointer; font-size: 28px; box-shadow: 0px 4px 10px rgba(0,0,0,0.3); transition: transform 0.2s; }
-    #chatbot-icon:hover { transform: scale(1.1); }
-    #chat-window { position: fixed; bottom: 100px; right: 25px; width: 400px; height: 550px; background: white; border-radius: 12px; box-shadow: 0px 4px 20px rgba(0,0,0,0.3); display: none; flex-direction: column; overflow: hidden; }
-    #chat-header { background: linear-gradient(135deg, #2C3E50 0%, #34495e 100%); color: white; padding: 15px; font-size: 18px; text-align: center; font-weight: bold; }
-    #chat-body { flex: 1; padding: 15px; overflow-y: auto; background: #fafafa; display: flex; flex-direction: column; gap: 10px; }
-    .msg { margin: 0; padding: 10px 14px; border-radius: 12px; max-width: 85%; display: inline-block; word-wrap: break-word; white-space: pre-wrap; }
-    .user { background: #3498db; color: white; align-self: flex-end; border-bottom-right-radius: 4px; }
-    .bot { background: #ecf0f1; color: black; align-self: flex-start; border-bottom-left-radius: 4px; }
-    .meta { font-size: 11px; color: #999; margin-top: 4px; }
-    #chat-input-area { display: flex; border-top: 1px solid #ddd; background: white; }
-    #chat-input { flex: 1; padding: 12px; border: none; outline: none; font-size: 14px; }
-    #chat-input:focus { background: #f9f9f9; }
-    #send-btn { width: 70px; background: #2C3E50; color: white; border: none; cursor: pointer; font-weight: bold; transition: background 0.2s; }
-    #send-btn:hover { background: #34495e; }
-    .suggestions { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
-    .suggestion { border: 1px solid #ddd; padding: 10px; border-radius: 10px; background: white; display: flex; justify-content: space-between; align-items: center; transition: background 0.2s; cursor: pointer; }
-    .suggestion:hover { background: #f0f8ff; }
-    .suggestion .meta { margin: 0; font-size: 11px; color: #666; }
-    .s-actions > button { margin-left: 6px; padding: 6px 12px; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; }
-    .s-actions > button:first-child { background: #3498db; color: white; }
-    .s-actions > button:last-child { background: #e74c3c; color: white; }
-    #booking-modal { position: fixed; left: 0; top: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.6); display: none; justify-content: center; align-items: center; z-index: 1000; }
-    #booking-modal .box { background: white; width: 420px; padding: 25px; border-radius: 15px; box-shadow: 0px 8px 30px rgba(0,0,0,0.3); max-height: 90vh; overflow-y: auto; }
-    #booking-modal h3 { margin: 0 0 20px 0; color: #2C3E50; font-size: 22px; text-align: center; }
-    #booking-modal .form-group { margin: 15px 0; }
-    #booking-modal label { display: block; font-size: 13px; font-weight: bold; color: #2C3E50; margin-bottom: 6px; }
-    #booking-modal input, #booking-modal select { width: 100%; padding: 12px; margin: 0; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; box-sizing: border-box; }
-    #booking-modal input:focus, #booking-modal select:focus { border-color: #3498db; outline: none; box-shadow: 0 0 5px rgba(52, 152, 219, 0.3); }
-    .button-group { display: flex; gap: 12px; justify-content: flex-end; margin-top: 25px; }
-    #b-cancel, #b-confirm { padding: 12px 20px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; font-size: 14px; }
-    #b-cancel { background: #95a5a6; color: white; }
-    #b-cancel:hover { background: #7f8c8d; }
-    #b-confirm { background: #27ae60; color: white; }
-    #b-confirm:hover { background: #229954; }
-    .typing { font-style: italic; color: #777; }
-    #notification { position: fixed; top: 20px; right: 20px; background: #27ae60; color: white; padding: 16px 24px; border-radius: 8px; box-shadow: 0px 4px 15px rgba(0,0,0,0.2); display: none; z-index: 2000; animation: slideIn 0.3s ease-out; }
-    @keyframes slideIn { from { transform: translateX(400px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
-    @keyframes slideOut { from { transform: translateX(0); opacity: 1; } to { transform: translateX(400px); opacity: 0; } }
-    #notification.hide { animation: slideOut 0.3s ease-out; }
-    #notification.error { background: #e74c3c; }
-    #admin-login-modal { position: fixed; left: 0; top: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.6); display: none; justify-content: center; align-items: center; z-index: 1000; }
-    #admin-login-modal .box { background: white; width: 360px; padding: 30px; border-radius: 15px; box-shadow: 0px 8px 30px rgba(0,0,0,0.3); }
-    #admin-login-modal h2 { margin: 0 0 20px 0; color: #2C3E50; text-align: center; }
-    #admin-login-modal .form-group { margin: 15px 0; }
-    #admin-login-modal input { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; }
-    .admin-buttons { display: flex; gap: 12px; margin-top: 20px; }
-    .admin-buttons button { flex: 1; padding: 12px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; }
-    #admin-login-btn { background: #3498db; color: white; }
-    #admin-close-btn { background: #95a5a6; color: white; }
-    #admin-dashboard { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: white; z-index: 2000; overflow-y: auto; }
-    #admin-dashboard-header { background: #2C3E50; color: white; padding: 20px; display: flex; justify-content: space-between; align-items: center; }
-    #admin-dashboard-content { padding: 20px; max-width: 1200px; margin: 0 auto; }
-    .admin-stat { display: inline-block; background: #ecf0f1; padding: 20px; border-radius: 8px; margin: 10px; text-align: center; }
-    .admin-stat .stat-value { font-size: 28px; font-weight: bold; color: #3498db; }
-    .admin-stat .stat-label { color: #666; font-size: 12px; }
-    .chats-table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-    .chats-table th { background: #34495e; color: white; padding: 12px; text-align: left; }
-    .chats-table td { padding: 12px; border-bottom: 1px solid #ddd; }
-    .chats-table tr:hover { background: #f5f5f5; }
-</style>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Nagpur Hotels - AI Booking Assistant</title>
+    <link rel="stylesheet" href="styles.css" />
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
-<header>
-    Nagpur Hotel Booking – Customer Support
-    <div style="position: absolute; right: 20px; top: 18px;">
-        <button id="admin-panel-btn" style="background: #34495e; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-size: 12px;">🔐 Admin</button>
-    </div>
-</header>
-<div id="chatbot-icon">💬</div>
-<div id="chat-window">
-    <div id="chat-header">AI Hotel Assistant</div>
-    <div id="chat-body"></div>
-    <div id="chat-input-area">
-        <input type="text" id="chat-input" placeholder="Type your message..." />
-        <button id="send-btn">Send</button>
-    </div>
-    <div style="font-size:11px;padding:6px;border-top: 1px dashed #eee;background:#fafafa;color:#666">This is a demo. To persist data, configure supabase and add env vars.</div>
-    
-    <!-- Booking modal -->
-    <div id="booking-modal">
-        <div class="box">
-            <h3 id="book-title">Complete Your Booking</h3>
-            <div class="form-group">
-                <label for="b-name">Full Name *</label>
-                <input id="b-name" type="text" placeholder="Enter your full name" />
+    <!-- Navigation -->
+    <nav class="navbar">
+        <div class="nav-container">
+            <div class="nav-logo">
+                <i class="fas fa-hotel"></i>
+                <span>Nagpur Hotels</span>
             </div>
-            <div class="form-group">
-                <label for="b-phone">Phone Number *</label>
-                <input id="b-phone" type="tel" placeholder="+91 98765 43210" />
+            <div class="nav-menu">
+                <a href="#home" class="nav-link">Home</a>
+                <a href="#hotels" class="nav-link">Hotels</a>
+                <a href="#about" class="nav-link">About</a>
+                <a href="#contact" class="nav-link">Contact</a>
+                <button id="admin-panel-btn" class="admin-btn">
+                    <i class="fas fa-user-shield"></i> Admin
+                </button>
             </div>
-            <div class="form-group">
-                <label for="b-date">Check-in Date *</label>
-                <input id="b-date" type="date" />
-            </div>
-            <div style="display: flex; gap: 12px;">
-                <div class="form-group" style="flex: 1;">
-                    <label for="b-nights">Number of Nights *</label>
-                    <input id="b-nights" type="number" min="1" placeholder="Nights" />
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section id="home" class="hero">
+        <div class="hero-overlay"></div>
+        <div class="hero-content">
+            <h1 class="hero-title">Discover Amazing Hotels in Nagpur</h1>
+            <p class="hero-subtitle">Book your perfect stay with our AI-powered assistant</p>
+            <div class="hero-search">
+                <div class="search-box">
+                    <i class="fas fa-map-marker-alt"></i>
+                    <input type="text" placeholder="Where do you want to stay?" class="search-input">
                 </div>
-                <div class="form-group" style="flex: 1;">
-                    <label for="b-visitors">Number of Visitors *</label>
-                    <input id="b-visitors" type="number" min="1" max="10" placeholder="Visitors" value="1" />
+                <div class="search-box">
+                    <i class="fas fa-calendar-alt"></i>
+                    <input type="date" class="search-input">
+                </div>
+                <div class="search-box">
+                    <i class="fas fa-users"></i>
+                    <select class="search-input">
+                        <option>1 Guest</option>
+                        <option>2 Guests</option>
+                        <option>3 Guests</option>
+                        <option>4+ Guests</option>
+                    </select>
+                </div>
+                <button class="search-btn" onclick="openChat()">
+                    <i class="fas fa-search"></i> Search Hotels
+                </button>
+            </div>
+        </div>
+    </section>
+
+    <!-- Features Section -->
+    <section class="features">
+        <div class="container">
+            <h2 class="section-title">Why Choose Us?</h2>
+            <div class="features-grid">
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <i class="fas fa-robot"></i>
+                    </div>
+                    <h3>AI-Powered Assistant</h3>
+                    <p>Get personalized hotel recommendations with our intelligent chatbot</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <i class="fas fa-money-bill-wave"></i>
+                    </div>
+                    <h3>Best Prices</h3>
+                    <p>Find the most affordable hotels in Nagpur with transparent pricing</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <i class="fas fa-clock"></i>
+                    </div>
+                    <h3>Instant Booking</h3>
+                    <p>Book your hotel instantly with automatic billing and confirmation</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <i class="fas fa-shield-alt"></i>
+                    </div>
+                    <h3>Secure & Safe</h3>
+                    <p>Your data is protected with enterprise-grade security</p>
                 </div>
             </div>
-            <div class="button-group">
-                <button id="b-cancel">Cancel</button>
-                <button id="b-confirm">Confirm Booking</button>
+        </div>
+    </section>
+
+    <!-- Popular Hotels Section -->
+    <section id="hotels" class="popular-hotels">
+        <div class="container">
+            <h2 class="section-title">Popular Hotels in Nagpur</h2>
+            <div class="hotels-grid">
+                <div class="hotel-card">
+                    <div class="hotel-image">
+                        <div class="hotel-badge">⭐ 4.8</div>
+                    </div>
+                    <div class="hotel-info">
+                        <h3>The Nagpur Grand</h3>
+                        <p class="hotel-location"><i class="fas fa-map-marker-alt"></i> Sitabuldi</p>
+                        <div class="hotel-amenities">
+                            <span><i class="fas fa-wifi"></i> WiFi</span>
+                            <span><i class="fas fa-car"></i> Parking</span>
+                            <span><i class="fas fa-utensils"></i> Restaurant</span>
+                        </div>
+                        <div class="hotel-price">
+                            <span class="price">₹4,500</span>
+                            <span class="per-night">/night</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="hotel-card">
+                    <div class="hotel-image">
+                        <div class="hotel-badge">⭐ 4.5</div>
+                    </div>
+                    <div class="hotel-info">
+                        <h3>Royal Palace Hotel</h3>
+                        <p class="hotel-location"><i class="fas fa-map-marker-alt"></i> Civil Lines</p>
+                        <div class="hotel-amenities">
+                            <span><i class="fas fa-wifi"></i> WiFi</span>
+                            <span><i class="fas fa-swimming-pool"></i> Pool</span>
+                            <span><i class="fas fa-dumbbell"></i> Gym</span>
+                        </div>
+                        <div class="hotel-price">
+                            <span class="price">₹3,200</span>
+                            <span class="per-night">/night</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="hotel-card">
+                    <div class="hotel-image">
+                        <div class="hotel-badge">⭐ 4.2</div>
+                    </div>
+                    <div class="hotel-info">
+                        <h3>Budget Inn Express</h3>
+                        <p class="hotel-location"><i class="fas fa-map-marker-alt"></i> Dharampeth</p>
+                        <div class="hotel-amenities">
+                            <span><i class="fas fa-wifi"></i> WiFi</span>
+                            <span><i class="fas fa-coffee"></i> Breakfast</span>
+                            <span><i class="fas fa-concierge-bell"></i> Service</span>
+                        </div>
+                        <div class="hotel-price">
+                            <span class="price">₹1,800</span>
+                            <span class="per-night">/night</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="view-all">
+                <button class="view-all-btn" onclick="openChat()">View All Hotels</button>
+            </div>
+        </div>
+    </section>
+
+    <!-- Testimonials Section -->
+    <section class="testimonials">
+        <div class="container">
+            <h2 class="section-title">What Our Guests Say</h2>
+            <div class="testimonials-grid">
+                <div class="testimonial-card">
+                    <div class="testimonial-content">
+                        <p>"The AI assistant helped me find the perfect hotel within my budget. Amazing experience!"</p>
+                    </div>
+                    <div class="testimonial-author">
+                        <div class="author-avatar">👤</div>
+                        <div class="author-info">
+                            <h4>Priya Sharma</h4>
+                            <span>Business Traveler</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="testimonial-card">
+                    <div class="testimonial-content">
+                        <p>"Quick booking, great prices, and excellent customer service. Highly recommended!"</p>
+                    </div>
+                    <div class="testimonial-author">
+                        <div class="author-avatar">👤</div>
+                        <div class="author-info">
+                            <h4>Rajesh Kumar</h4>
+                            <span>Tourist</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="testimonial-card">
+                    <div class="testimonial-content">
+                        <p>"The chatbot understood exactly what I needed. Found a great hotel for my family trip."</p>
+                    </div>
+                    <div class="testimonial-author">
+                        <div class="author-avatar">👤</div>
+                        <div class="author-info">
+                            <h4>Anita Desai</h4>
+                            <span>Family Traveler</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-section">
+                    <div class="footer-logo">
+                        <i class="fas fa-hotel"></i>
+                        <span>Nagpur Hotels</span>
+                    </div>
+                    <p>Your trusted partner for hotel bookings in Nagpur</p>
+                </div>
+                <div class="footer-section">
+                    <h4>Quick Links</h4>
+                    <ul>
+                        <li><a href="#home">Home</a></li>
+                        <li><a href="#hotels">Hotels</a></li>
+                        <li><a href="#about">About</a></li>
+                        <li><a href="#contact">Contact</a></li>
+                    </ul>
+                </div>
+                <div class="footer-section">
+                    <h4>Contact Info</h4>
+                    <p><i class="fas fa-phone"></i> +91 98765 43210</p>
+                    <p><i class="fas fa-envelope"></i> info@nagpurhotels.com</p>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <p>&copy; 2024 Nagpur Hotels. All rights reserved.</p>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Floating Chat Button -->
+    <div id="chatbot-icon" class="chat-fab">
+        <i class="fas fa-comments"></i>
+        <div class="chat-pulse"></div>
+    </div>
+
+    <!-- Chat Window -->
+    <div id="chat-window" class="chat-container">
+        <div id="chat-header" class="chat-header">
+            <div class="chat-header-info">
+                <div class="bot-avatar">
+                    <i class="fas fa-robot"></i>
+                </div>
+                <div class="bot-info">
+                    <h4>AI Hotel Assistant</h4>
+                    <span class="bot-status">Online</span>
+                </div>
+            </div>
+            <button class="chat-close" onclick="closeChat()">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <div id="chat-body" class="chat-messages"></div>
+        <div class="chat-suggestions">
+            <button class="suggestion-chip" onclick="sendSuggestion('Show me hotels under ₹3000')">Budget Hotels</button>
+            <button class="suggestion-chip" onclick="sendSuggestion('Hotels near airport')">Near Airport</button>
+            <button class="suggestion-chip" onclick="sendSuggestion('Luxury hotels')">Luxury Hotels</button>
+        </div>
+        <div id="chat-input-area" class="chat-input-container">
+            <input type="text" id="chat-input" placeholder="Ask me about hotels in Nagpur..." />
+            <button id="send-btn" class="send-button">
+                <i class="fas fa-paper-plane"></i>
+            </button>
+        </div>
+        <div class="chat-footer">
+            <i class="fas fa-shield-alt"></i> Secure & Private Conversations
+        </div>
+    </div>
+
+    <!-- Booking Modal -->
+    <div id="booking-modal" class="modal-overlay">
+        <div class="modal-container">
+            <div class="modal-header">
+                <h3 id="book-title"><i class="fas fa-calendar-check"></i> Complete Your Booking</h3>
+                <button class="modal-close" onclick="closeBookingModal()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="b-name"><i class="fas fa-user"></i> Full Name *</label>
+                    <input id="b-name" type="text" placeholder="Enter your full name" />
+                </div>
+                <div class="form-group">
+                    <label for="b-phone"><i class="fas fa-phone"></i> Phone Number *</label>
+                    <input id="b-phone" type="tel" placeholder="+91 98765 43210" />
+                </div>
+                <div class="form-group">
+                    <label for="b-date"><i class="fas fa-calendar-alt"></i> Check-in Date *</label>
+                    <input id="b-date" type="date" />
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="b-nights"><i class="fas fa-moon"></i> Number of Nights *</label>
+                        <input id="b-nights" type="number" min="1" placeholder="Nights" />
+                    </div>
+                    <div class="form-group">
+                        <label for="b-visitors"><i class="fas fa-users"></i> Number of Visitors *</label>
+                        <input id="b-visitors" type="number" min="1" max="10" placeholder="Visitors" value="1" />
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="b-cancel" class="btn-secondary">Cancel</button>
+                <button id="b-confirm" class="btn-primary">Confirm Booking</button>
             </div>
         </div>
     </div>
-    
-    <!-- Payment modal -->
-    <div id="payment-modal" style="position: fixed; left: 0; top: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.6); display: none; justify-content: center; align-items: center; z-index: 1000;">
-        <div class="box" style="width: 420px; padding: 25px; border-radius: 15px; background: white; box-shadow: 0px 8px 30px rgba(0,0,0,0.3);">
-            <h3 style="margin: 0 0 20px 0; color: #2C3E50; font-size: 22px; text-align: center;">Payment Details</h3>
-            <div style="background: #f5f5f5; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
-                <div style="margin: 10px 0; display: flex; justify-content: space-between;">
-                    <span>Hotel:</span>
-                    <strong id="p-hotel">-</strong>
+
+    <!-- Payment Modal -->
+    <div id="payment-modal" class="modal-overlay">
+        <div class="modal-container">
+            <div class="modal-header">
+                <h3><i class="fas fa-credit-card"></i> Payment Details</h3>
+                <button class="modal-close" onclick="closePaymentModal()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="payment-summary">
+                    <div class="payment-item">
+                        <span>Hotel:</span>
+                        <strong id="p-hotel">-</strong>
+                    </div>
+                    <div class="payment-item">
+                        <span>Subtotal:</span>
+                        <strong>₹<span id="p-subtotal">0</span></strong>
+                    </div>
+                    <div class="payment-item">
+                        <span>GST (18%):</span>
+                        <strong>₹<span id="p-gst">0</span></strong>
+                    </div>
+                    <div class="payment-divider"></div>
+                    <div class="payment-total">
+                        <span>Total Amount:</span>
+                        <strong class="total-amount">₹<span id="p-total">0</span></strong>
+                    </div>
                 </div>
-                <div style="margin: 10px 0; display: flex; justify-content: space-between;">
-                    <span>Subtotal (₹):</span>
-                    <strong id="p-subtotal">0</strong>
-                </div>
-                <div style="margin: 10px 0; display: flex; justify-content: space-between;">
-                    <span>GST (18%):</span>
-                    <strong id="p-gst">0</strong>
-                </div>
-                <hr style="margin: 15px 0; border: none; border-top: 1px solid #ddd;">
-                <div style="margin: 10px 0; display: flex; justify-content: space-between; font-size: 18px;">
-                    <span><strong>Total Amount (₹):</strong></span>
-                    <strong id="p-total" style="color: #27ae60;">0</strong>
+                <div id="p-payment-url" class="payment-gateway">
+                    <div class="payment-methods">
+                        <h4>Choose Payment Method</h4>
+                        <div class="payment-options">
+                            <div class="payment-option">
+                                <i class="fas fa-credit-card"></i>
+                                <span>Credit/Debit Card</span>
+                            </div>
+                            <div class="payment-option">
+                                <i class="fas fa-mobile-alt"></i>
+                                <span>UPI Payment</span>
+                            </div>
+                            <div class="payment-option">
+                                <i class="fas fa-university"></i>
+                                <span>Net Banking</span>
+                            </div>
+                        </div>
+                    </div>
+                    <a id="p-payment-link" href="#" target="_blank" class="payment-link">
+                        <i class="fas fa-lock"></i> Secure Payment Gateway
+                    </a>
                 </div>
             </div>
-            <div id="p-payment-url" style="margin: 15px 0; padding: 12px; background: #e8f5e9; border-radius: 8px; text-align: center; display: none;">
-                <p style="margin: 0 0 10px 0; color: #666;">Payment Gateway:</p>
-                <a id="p-payment-link" href="#" target="_blank" style="display: inline-block; padding: 10px 20px; background: #27ae60; color: white; text-decoration: none; border-radius: 6px; font-weight: bold;">Click to Pay</a>
-            </div>
-            <div style="display: flex; gap: 12px; justify-content: flex-end; margin-top: 25px;">
-                <button id="p-cancel" style="padding: 12px 20px; border: none; border-radius: 8px; background: #95a5a6; color: white; cursor: pointer; font-weight: bold;">Cancel</button>
-                <button id="p-confirm" style="padding: 12px 20px; border: none; border-radius: 8px; background: #27ae60; color: white; cursor: pointer; font-weight: bold;">Proceed to Payment</button>
+            <div class="modal-footer">
+                <button id="p-cancel" class="btn-secondary">Cancel</button>
+                <button id="p-confirm" class="btn-primary">Proceed to Payment</button>
             </div>
         </div>
     </div>
-    
+
+    <!-- Admin Login Modal -->
+    <div id="admin-login-modal" class="modal-overlay">
+        <div class="modal-container admin-modal">
+            <div class="modal-header">
+                <h2><i class="fas fa-user-shield"></i> Admin Login</h2>
+                <button class="modal-close" onclick="closeAdminModal()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="admin-username"><i class="fas fa-user"></i> Username</label>
+                    <input id="admin-username" type="text" placeholder="Enter username" />
+                </div>
+                <div class="form-group">
+                    <label for="admin-password"><i class="fas fa-lock"></i> Password</label>
+                    <input id="admin-password" type="password" placeholder="Enter password" />
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="admin-close-btn" class="btn-secondary">Cancel</button>
+                <button id="admin-login-btn" class="btn-primary">Login</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Admin Dashboard -->
+    <div id="admin-dashboard">
+        <div id="admin-dashboard-header">
+            <h1>📊 Admin Dashboard</h1>
+            <button id="admin-logout-btn">Logout</button>
+        </div>
+        <div id="admin-dashboard-content">
+            <h2>Conversation Analytics</h2>
+            <div>
+                <div class="admin-stat">
+                    <div class="stat-value" id="admin-total-chats">0</div>
+                    <div class="stat-label">Total Conversations</div>
+                </div>
+                <div class="admin-stat">
+                    <div class="stat-value" id="admin-active-users">0</div>
+                    <div class="stat-label">Active Users</div>
+                </div>
+            </div>
+            <h3>Recent Conversations</h3>
+            <table class="chats-table">
+                <thead>
+                    <tr>
+                        <th>User ID</th>
+                        <th>Role</th>
+                        <th>Message Preview</th>
+                        <th>Timestamp</th>
+                    </tr>
+                </thead>
+                <tbody id="admin-chats-tbody">
+                    <tr>
+                        <td colspan="4" style="text-align: center; padding: 20px;">Loading conversations...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Notification Container -->
     <div id="notification"></div>
-</div>
 
-<!-- Admin Login Modal -->
-<div id="admin-login-modal">
-    <div class="box">
-        <h2>Admin Login</h2>
-        <div class="form-group">
-            <label for="admin-username">Username</label>
-            <input id="admin-username" type="text" placeholder="Username" />
-        </div>
-        <div class="form-group">
-            <label for="admin-password">Password</label>
-            <input id="admin-password" type="password" placeholder="Password" />
-        </div>
-        <div class="admin-buttons">
-            <button id="admin-login-btn">Login</button>
-            <button id="admin-close-btn">Cancel</button>
-        </div>
-    </div>
-</div>
-
-<!-- Admin Dashboard -->
-<div id="admin-dashboard">
-    <div id="admin-dashboard-header">
-        <h1>📊 Admin Dashboard</h1>
-        <button id="admin-logout-btn" style="background: #e74c3c; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer;">Logout</button>
-    </div>
-    <div id="admin-dashboard-content">
-        <h2>Conversation Analytics</h2>
-        <div>
-            <div class="admin-stat">
-                <div class="stat-value" id="admin-total-chats">0</div>
-                <div class="stat-label">Total Conversations</div>
-            </div>
-            <div class="admin-stat">
-                <div class="stat-value" id="admin-active-users">0</div>
-                <div class="stat-label">Active Users</div>
-            </div>
-        </div>
-        <h3>Recent Conversations</h3>
-        <table class="chats-table">
-            <thead>
-                <tr>
-                    <th>User ID</th>
-                    <th>Role</th>
-                    <th>Message Preview</th>
-                    <th>Timestamp</th>
-                </tr>
-            </thead>
-            <tbody id="admin-chats-tbody">
-                <tr><td colspan="4" style="text-align: center; padding: 20px;">Loading conversations...</td></tr>
-            </tbody>
-        </table>
-    </div>
-</div>
-
-<script>
-    const icon = document.getElementById('chatbot-icon');
-    const chatWindow = document.getElementById('chat-window');
-    const sendBtn = document.getElementById('send-btn');
-    const input = document.getElementById('chat-input');
-    const chatBody = document.getElementById('chat-body');
-    const BASE = 'http://127.0.0.1:8000';
-    let userPreferences = { nights: null, budget: null, visitors: null };
-    let adminToken = null;
-    
-    function getUserId() {
-        let id = localStorage.getItem('ai_user_id');
-        if (!id) {
-            id = 'u' + Math.random().toString(36).slice(2,10);
-            localStorage.setItem('ai_user_id', id);
-        }
-        return id;
-    }
-    
-    function showAdminLogin() {
-        document.getElementById('admin-login-modal').style.display = 'flex';
-        document.getElementById('admin-username').focus();
-    }
-    
-    function closeAdminLogin() {
-        document.getElementById('admin-login-modal').style.display = 'none';
-        document.getElementById('admin-username').value = '';
-        document.getElementById('admin-password').value = '';
-    }
-    
-    function closeAdminDashboard() {
-        document.getElementById('admin-dashboard').style.display = 'none';
-        adminToken = null;
-    }
-    
-    async function performAdminLogin() {
-        const username = document.getElementById('admin-username').value.trim();
-        const password = document.getElementById('admin-password').value;
-        
-        if (!username || !password) {
-            showNotification('Please enter username and password', true);
-            return;
-        }
-        
-        try {
-            const res = await fetch(`${BASE}/admin/login`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ username, password })
-            });
-            
-            if (!res.ok) {
-                showNotification('Invalid credentials', true);
-                return;
-            }
-            
-            const data = await res.json();
-            adminToken = data.token;
-            closeAdminLogin();
-            showAdminDashboard();
-            showNotification('Logged in as admin', false);
-        } catch (err) {
-            showNotification('Login failed: ' + err.message, true);
-        }
-    }
-    
-    async function showAdminDashboard() {
-        document.getElementById('admin-dashboard').style.display = 'block';
-        await loadAdminData();
-    }
-    
-    async function loadAdminData() {
-        try {
-            const res = await fetch(`${BASE}/admin/chats?limit=20`, {
-                headers: { 'Authorization': `Bearer ${adminToken}` }
-            });
-            
-            if (!res.ok) {
-                showNotification('Failed to load admin data', true);
-                return;
-            }
-            
-            const data = await res.json();
-            const tbody = document.getElementById('admin-chats-tbody');
-            tbody.innerHTML = '';
-            
-            if (data.conversations && data.conversations.length > 0) {
-                const uniqueUsers = new Set(data.conversations.map(c => c.user_id));
-                document.getElementById('admin-total-chats').textContent = data.count;
-                document.getElementById('admin-active-users').textContent = uniqueUsers.size;
-                
-                data.conversations.forEach(conv => {
-                    const row = document.createElement('tr');
-                    const timestamp = conv.created_at ? new Date(conv.created_at).toLocaleString() : 'N/A';
-                    const preview = (conv.message || '').substring(0, 60).replace(/</g, '&lt;').replace(/>/g, '&gt;');
-                    row.innerHTML = `
-                        <td>${conv.user_id}</td>
-                        <td><strong>${conv.role}</strong></td>
-                        <td>${preview}${preview.length > 60 ? '...' : ''}</td>
-                        <td>${timestamp}</td>
-                    `;
-                    tbody.appendChild(row);
-                });
-            } else {
-                tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; padding: 20px;">No conversations found</td></tr>';
-            }
-        } catch (err) {
-            showNotification('Error loading data: ' + err.message, true);
-        }
-    }
-
-    function showNotification(message, isError = false) {
-        const notif = document.getElementById('notification');
-        notif.textContent = message;
-        notif.className = isError ? 'error' : '';
-        notif.style.display = 'block';
-        setTimeout(() => {
-            notif.classList.add('hide');
-            setTimeout(() => {
-                notif.style.display = 'none';
-                notif.classList.remove('hide');
-            }, 300);
-        }, 3000);
-    }
-
-    function addMessage(text, type='bot', meta=null) {
-        const div = document.createElement('div');
-        const p = document.createElement('div');
-        p.className='msg ' + (type==='user'?'user':'bot');
-        p.textContent = text;
-        div.appendChild(p);
-        if (meta && meta.suggestions) {
-            const s = document.createElement('div'); s.className='suggestions';
-            for (const h of meta.suggestions) {
-                const el = createSuggestionItem(h);
-                s.appendChild(el);
-            }
-            div.appendChild(s);
-        }
-        chatBody.appendChild(div);
-        chatBody.scrollTop = chatBody.scrollHeight;
-    }
-
-    function showTyping() {
-        const d = document.createElement('div');
-        d.id = 'typing-indicator';
-        d.className = 'msg bot typing';
-        d.textContent = 'Bot is typing...';
-        chatBody.appendChild(d);
-        chatBody.scrollTop = chatBody.scrollHeight;
-        return d;
-    }
-
-    function removeTyping(d) { if (d && d.parentNode) d.parentNode.removeChild(d); }
-
-    function createSuggestionItem(hotel) {
-        const card = document.createElement('div');
-        card.className = 'suggestion';
-        const left = document.createElement('div');
-        left.innerHTML = `<b>${hotel.name}</b><div class='meta'>id: ${hotel.id} · ₹${hotel.price_per_night} · ⭐${hotel.rating}</div>`;
-        const actions = document.createElement('div'); actions.className='s-actions';
-        const selectBtn = document.createElement('button'); selectBtn.textContent='Select';
-        selectBtn.onclick = () => { sendChat(`${hotel.id}`); };
-        const bookBtn = document.createElement('button'); bookBtn.textContent='Book';
-        bookBtn.onclick = () => { openBookingModal(hotel); };
-        actions.appendChild(selectBtn); actions.appendChild(bookBtn);
-        card.appendChild(left); card.appendChild(actions);
-        return card;
-    }
-
-    function sendChat(message) {
-        if (!message || !message.trim()) return;
-        addMessage(message, 'user');
-        input.value='';
-        const t = showTyping();
-        const payload = { user_id: getUserId(), message };
-        fetch(`${BASE}/chat`, { method:'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
-            .then(r => r.json())
-            .then(data => {
-                removeTyping(t);
-                addMessage(data.reply, 'bot', { suggestions: data.suggestions || [] });
-                if (data.meta) {
-                    if (data.meta.nights) userPreferences.nights = data.meta.nights;
-                    if (data.meta.visitors) userPreferences.visitors = data.meta.visitors;
-                }
-                if (data.suggestions && data.suggestions.length > 0) {
-                    data.suggestions.forEach(s => {
-                        if (s.price_per_night) userPreferences.budget = s.price_per_night;
-                    });
-                }
-            })
-            .catch(err => {
-                removeTyping(t);
-                addMessage('⚠️ Error connecting to server: ' + (err.message||err), 'bot');
-                showNotification('Connection error! Please try again.', true);
-            });
-    }
-
-    let pendingBookingData = null;
-    
-    async function performBook(name, phone, hotel_id, checkin_date, nights, visitors) {
-        const payload = { name, phone, hotel_id, checkin_date, nights, visitors, user_id: getUserId() };
-        try {
-            const res = await fetch(`${BASE}/book`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
-            if (!res.ok) {
-                const text = await res.text();
-                addMessage('❌ Booking failed: ' + text, 'bot');
-                showNotification('Booking failed!', true);
-                return;
-            }
-            const data = await res.json();
-            pendingBookingData = data;
-            addMessage(data.bill, 'bot');
-            showPaymentModal(data);
-            showNotification('Opening payment details...', false);
-        } catch (err) {
-            addMessage('❌ Booking error: ' + err.message, 'bot');
-            showNotification('Booking error!', true);
-        }
-    }
-    
-    async function showPaymentModal(bookingData) {
-        const modal = document.getElementById('payment-modal');
-        const subtotal = bookingData.total_price;
-        const gst = subtotal * 0.18;
-        const total = subtotal + gst;
-        
-        document.getElementById('p-hotel').textContent = bookingData.hotel.name;
-        document.getElementById('p-subtotal').textContent = subtotal.toFixed(2);
-        document.getElementById('p-gst').textContent = gst.toFixed(2);
-        document.getElementById('p-total').textContent = total.toFixed(2);
-        
-        modal.style.display = 'flex';
-    }
-    
-    async function proceedToPayment(bookingData) {
-        const subtotal = bookingData.total_price;
-        const gst = subtotal * 0.18;
-        const total = subtotal + gst;
-        
-        try {
-            addMessage('💳 Creating payment intent...', 'bot');
-            const paymentRes = await fetch(`${BASE}/internal/payment_intent`, {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({
-                    amount_inr: Math.round(total),
-                    currency: 'INR',
-                    description: `Booking for ${bookingData.hotel.name}`,
-                    booking_id: bookingData.booking_id
-                })
-            });
-            
-            if (!paymentRes.ok) {
-                throw new Error('Payment intent creation failed');
-            }
-            
-            const paymentData = await paymentRes.json();
-            document.getElementById('p-payment-link').href = paymentData.payment_url;
-            document.getElementById('p-payment-url').style.display = 'block';
-            
-            addMessage('✅ Payment gateway ready! Click the payment link to complete payment.', 'bot');
-            showNotification('Payment intent created. Click the payment link!', false);
-            
-            setTimeout(() => generateInvoice(bookingData.booking_id), 2000);
-        } catch (err) {
-            addMessage('❌ Payment error: ' + err.message, 'bot');
-            showNotification('Payment setup failed!', true);
-        }
-    }
-    
-    async function generateInvoice(bookingId) {
-        try {
-            const invoiceRes = await fetch(`${BASE}/internal/generate_invoice`, {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({
-                    booking_id: bookingId,
-                    gst_percent: 18
-                })
-            });
-            
-            if (!invoiceRes.ok) {
-                throw new Error('Invoice generation failed');
-            }
-            
-            const invoiceData = await invoiceRes.json();
-            addMessage(`📄 Invoice generated: ${invoiceData.invoice_id}`, 'bot');
-            addMessage('✅ Booking complete! Check your email for invoice and payment details.', 'bot');
-        } catch (err) {
-            console.log('Note: Invoice generation skipped - ' + err.message);
-        }
-    }
-    
-    function closePaymentModal() {
-        document.getElementById('payment-modal').style.display = 'none';
-        pendingBookingData = null;
-    }
-
-    const modal = document.getElementById('booking-modal');
-    const bName = document.getElementById('b-name');
-    const bPhone = document.getElementById('b-phone');
-    const bDate = document.getElementById('b-date');
-    const bNights = document.getElementById('b-nights');
-    const bVisitors = document.getElementById('b-visitors');
-    const bCancel = document.getElementById('b-cancel');
-    const bConfirm = document.getElementById('b-confirm');
-    let pendingHotel = null;
-
-    function openBookingModal(hotel) {
-        pendingHotel = hotel;
-        document.getElementById('book-title').textContent = `Complete Booking: ${hotel.name}`;
-        bDate.value = '';
-        bName.value = '';
-        bPhone.value = '';
-        bNights.value = userPreferences.nights || 1;
-        bVisitors.value = userPreferences.visitors || 1;
-        modal.style.display = 'flex';
-        // Removed redundant "Opening booking form" message
-    }
-
-    function closeBookingModal() {
-        modal.style.display = 'none';
-        pendingHotel = null;
-    }
-
-    bCancel.onclick = () => {
-        closeBookingModal();
-        addMessage('❌ Booking cancelled.', 'bot');
-    };
-
-    bConfirm.onclick = () => {
-        const name = bName.value.trim();
-        const phone = bPhone.value.trim();
-        const date = bDate.value;
-        const nights = parseInt(bNights.value || '1');
-        const visitors = parseInt(bVisitors.value || '1');
-
-        if (!name || !phone || !date || !nights || !visitors || !pendingHotel) {
-            showNotification('❌ Please fill in all fields!', true);
-            return;
-        }
-
-        userPreferences.nights = nights;
-        userPreferences.visitors = visitors;
-        closeBookingModal();
-        addMessage(`🔄 Confirming your booking for ${pendingHotel.name}...`, 'bot');
-        performBook(name, phone, pendingHotel.id, date, nights, visitors);
-    };
-
-    icon.onclick = () => {
-        chatWindow.style.display = chatWindow.style.display === 'flex' ? 'none' : 'flex';
-        chatWindow.style.flexDirection = 'column';
-    };
-
-    sendBtn.onclick = () => { sendChat(input.value.trim()); };
-    input.addEventListener('keypress', (e) => { if (e.key === 'Enter') sendChat(input.value.trim()); });
-    
-    document.getElementById('admin-panel-btn').onclick = () => { showAdminLogin(); };
-    document.getElementById('admin-login-btn').onclick = () => { performAdminLogin(); };
-    document.getElementById('admin-close-btn').onclick = () => { closeAdminLogin(); };
-    document.getElementById('admin-logout-btn').onclick = () => { closeAdminDashboard(); };
-    
-    document.getElementById('admin-username').addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') performAdminLogin();
-    });
-    document.getElementById('admin-password').addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') performAdminLogin();
-    });
-    
-    document.getElementById('p-cancel').onclick = () => {
-        closePaymentModal();
-        addMessage('❌ Payment cancelled.', 'bot');
-    };
-    
-    document.getElementById('p-confirm').onclick = () => {
-        if (pendingBookingData) {
-            proceedToPayment(pendingBookingData);
-        }
-    };
-
-    window.addEventListener('DOMContentLoaded', () => { sendChat('Hi'); });
-</script>
+    <!-- External JavaScript Files -->
+    <script src="js/utils.js"></script>
+    <script src="js/chat.js"></script>
+    <script src="js/booking.js"></script>
+    <script src="js/payment.js"></script>
+    <script src="js/admin.js"></script>
+    <script src="js/app.js"></script>
 </body>
 </html>
