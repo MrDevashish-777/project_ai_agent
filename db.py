@@ -152,6 +152,37 @@ def save_conversation(user_id: Optional[str], role: str, message: str, meta: dic
         print(f"✅ Conversation saved: {user_id} - {role} - {r.data}")
         return r
     except Exception as e:
+        # Handle foreign-key constraint failures: ensure the referenced user exists, then retry once
+        err_str = str(e)
+        fk_issue = False
+        try:
+            # Postgres foreign key error code 23503 may be surfaced inside the exception message
+            if "23503" in err_str or "conversations_user_id_fkey" in err_str or "Key (user_id)" in err_str:
+                fk_issue = True
+        except Exception:
+            fk_issue = False
+
+        if fk_issue and user_id:
+            try:
+                # Check if user exists by id
+                existing = supabase.table("users").select("*").eq("id", user_id).limit(1).execute()
+                if not existing.data:
+                    # Create a minimal placeholder user so FK constraint is satisfied
+                    placeholder = {"id": user_id, "name": "guest", "phone": ""}
+                    try:
+                        supabase.table("users").insert(placeholder).execute()
+                        print(f"ℹ️  Created placeholder user for id {user_id} to satisfy FK")
+                    except Exception as ins_e:
+                        print(f"⚠️  Failed to create placeholder user: {ins_e}")
+                # Retry inserting the conversation once
+                r2 = supabase.table("conversations").insert(payload).execute()
+                print(f"✅ Conversation saved after creating user: {user_id} - {role} - {r2.data}")
+                return r2
+            except Exception as retry_e:
+                print(f"❌ Error saving conversation after retry: {retry_e}")
+                raise
+
+        # Not a FK issue or no user_id provided - re-raise
         print(f"❌ Error saving conversation: {e}")
         raise
 

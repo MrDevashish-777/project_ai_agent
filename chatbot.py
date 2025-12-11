@@ -223,8 +223,10 @@ Respond naturally and helpfully. Keep responses concise (1-2 sentences)."""
         response = gemini_model.generate_content(full_message)
         return response.text if response and response.text else None
     except Exception as e:
+        # Return a helpful fallback string so callers get a usable response
+        err_msg = f"⚠️ AI temporarily unavailable: {str(e)}"
         print(f"Gemini API Error: {e}")
-        return None
+        return err_msg
 
 def bot_reply(user_msg: str, user_id: str = None) -> Tuple[str, Optional[List[dict]], dict]:
     lower = user_msg.lower()
@@ -440,4 +442,9 @@ def bot_reply(user_msg: str, user_id: str = None) -> Tuple[str, Optional[List[di
     if gemini_response:
         meta["ai_powered"] = True
         return gemini_response, None, meta
+
+    # Fallback: if no specialized handler matched and Gemini didn't produce a response,
+    # return a safe generic reply so callers always receive a 3-tuple.
+    fallback = "Sorry, I'm having trouble generating a reply right now. Please try again shortly."
+    return fallback, None, meta
     
