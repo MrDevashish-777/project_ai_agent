@@ -121,7 +121,18 @@ ADMIN_TOKENS = {}
 @app.post("/chat", response_model=ChatResponse)
 async def chat(req: ChatRequest):
     try:
-        user_id = req.user_id or f"u_{uuid.uuid4().hex[:10]}"
+        # Ensure user_id is a valid UUID
+        if req.user_id:
+            try:
+                # Try to parse as UUID
+                uuid.UUID(req.user_id)
+                user_id = req.user_id
+            except (ValueError, AttributeError):
+                # If not a valid UUID, generate one from the string
+                user_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, req.user_id))
+        else:
+            user_id = str(uuid.uuid4())
+        
         db.save_conversation(user_id, "user", req.message, meta={})
         reply, suggestions, meta = bot_reply(req.message, user_id=user_id)
         db.save_conversation(user_id, "bot", reply, meta=meta)
@@ -633,4 +644,4 @@ async def supabase_test():
 
 if __name__ == '__main__':
     import uvicorn
-    uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)
+    uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=False)
