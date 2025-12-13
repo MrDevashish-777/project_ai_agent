@@ -5,15 +5,39 @@
 
 /**
  * Get or create a unique user ID
- * @returns {string} User ID
+ * @returns {string} User ID (UUID format)
  */
 function getUserId() {
     let id = localStorage.getItem('ai_user_id');
-    if (!id) {
-        id = 'u' + Math.random().toString(36).slice(2, 10);
+    if (!id || !isValidUUID(id)) {
+        // Generate new UUID if missing or invalid
+        id = generateUUID();
         localStorage.setItem('ai_user_id', id);
+        console.log('Generated new user ID:', id);
     }
     return id;
+}
+
+/**
+ * Check if string is valid UUID format
+ * @param {string} uuid - UUID string to validate
+ * @returns {boolean} True if valid UUID
+ */
+function isValidUUID(uuid) {
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    return uuidRegex.test(uuid);
+}
+
+/**
+ * Generate a UUID v4 format string
+ * @returns {string} UUID v4
+ */
+function generateUUID() {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+        const r = Math.random() * 16 | 0;
+        const v = c === 'x' ? r : (r & 0x3 | 0x8);
+        return v.toString(16);
+    });
 }
 
 /**
@@ -122,4 +146,44 @@ function createSuggestionItem(hotel) {
     card.appendChild(actions);
     
     return card;
+}
+
+/**
+ * Book a hotel by ID
+ * @param {string} hotelId - Hotel ID
+ */
+function bookHotel(hotelId) {
+    try {
+        if (typeof hotelSuggestions !== 'undefined' && hotelSuggestions[hotelId]) {
+            const hotel = hotelSuggestions[hotelId];
+            openBookingModal(hotel);
+            return;
+        }
+        
+        console.error('Hotel not found in suggestions:', hotelId, 'Available:', Object.keys(hotelSuggestions));
+        showNotification('Hotel not found', true);
+    } catch (err) {
+        console.error('Error booking hotel:', err);
+        showNotification('Failed to book hotel', true);
+    }
+}
+
+/**
+ * View details for a hotel by ID
+ * @param {string} hotelId - Hotel ID
+ */
+function viewDetails(hotelId) {
+    try {
+        if (typeof hotelSuggestions !== 'undefined' && hotelSuggestions[hotelId]) {
+            const hotel = hotelSuggestions[hotelId];
+            sendChat(`Tell me more about ${hotel.name}`);
+            return;
+        }
+        
+        console.error('Hotel not found in suggestions:', hotelId, 'Available:', Object.keys(hotelSuggestions));
+        showNotification('Hotel not found', true);
+    } catch (err) {
+        console.error('Error viewing details:', err);
+        showNotification('Failed to view details', true);
+    }
 }

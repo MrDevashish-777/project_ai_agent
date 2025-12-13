@@ -168,12 +168,15 @@ def save_conversation(user_id: Optional[str], role: str, message: str, meta: dic
                 existing = supabase.table("users").select("*").eq("id", user_id).limit(1).execute()
                 if not existing.data:
                     # Create a minimal placeholder user so FK constraint is satisfied
-                    placeholder = {"id": user_id, "name": "guest", "phone": ""}
+                    # Use a generated phone to avoid unique constraint violation
+                    unique_phone = f"chat_{user_id[:8]}"
+                    placeholder = {"id": user_id, "name": "guest", "phone": unique_phone}
                     try:
                         supabase.table("users").insert(placeholder).execute()
                         print(f"ℹ️  Created placeholder user for id {user_id} to satisfy FK")
                     except Exception as ins_e:
                         print(f"⚠️  Failed to create placeholder user: {ins_e}")
+                        # If creation fails, just continue - conversation might still insert
                 # Retry inserting the conversation once
                 r2 = supabase.table("conversations").insert(payload).execute()
                 print(f"✅ Conversation saved after creating user: {user_id} - {role} - {r2.data}")

@@ -5,6 +5,7 @@
 
 const BASE = 'http://127.0.0.1:8000';
 let userPreferences = { nights: null, budget: null, visitors: null };
+let hotelSuggestions = {};
 
 /**
  * Send a chat message
@@ -157,6 +158,8 @@ function addMessageWithAnimation(message, sender, options = {}) {
         suggestionsDiv.className = 'suggestions';
         
         options.suggestions.forEach((suggestion, index) => {
+            hotelSuggestions[suggestion.id] = suggestion;
+            
             const suggestionDiv = document.createElement('div');
             suggestionDiv.className = 'suggestion';
             suggestionDiv.innerHTML = `

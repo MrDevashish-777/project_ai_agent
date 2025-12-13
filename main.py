@@ -121,15 +121,16 @@ ADMIN_TOKENS = {}
 @app.post("/chat", response_model=ChatResponse)
 async def chat(req: ChatRequest):
     try:
-        # Ensure user_id is a valid UUID
-        if req.user_id:
+        # Use the user_id provided by the browser (from localStorage)
+        # Validate that it's a proper UUID format
+        user_id = req.user_id
+        if user_id:
             try:
-                # Try to parse as UUID
-                uuid.UUID(req.user_id)
-                user_id = req.user_id
-            except (ValueError, AttributeError):
-                # If not a valid UUID, generate one from the string
-                user_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, req.user_id))
+                uuid.UUID(user_id)
+            except (ValueError, AttributeError, TypeError):
+                # Invalid UUID format, generate a new one
+                user_id = str(uuid.uuid4())
+                logger.info(f"Invalid user_id format received: {req.user_id}, generated new UUID: {user_id}")
         else:
             user_id = str(uuid.uuid4())
         
